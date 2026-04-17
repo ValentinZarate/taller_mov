@@ -1,21 +1,22 @@
+/* Base */
 body {
   margin: 0;
-  font-family: "Courier New", monospace;
-  background-color: #0d1117;
-  color: #c9d1d9;
+  font-family: "Fira Code", "Courier New", monospace;
+  background-color: #0b0f14;
+  color: #e6edf3;
   line-height: 1.6;
 }
 
-/* Header tipo terminal */
+/* Header */
 header {
-  background-color: #161b22;
+  background-color: #11161c;
   color: #58a6ff;
-  padding: 25px;
+  padding: 30px;
   text-align: center;
   border-bottom: 1px solid #30363d;
 }
 
-/* Contenedor principal */
+/* Contenedor */
 main {
   max-width: 900px;
   margin: 30px auto;
@@ -29,7 +30,7 @@ h1 {
 
 h2 {
   color: #79c0ff;
-  border-left: 4px solid #58a6ff;
+  border-left: 5px solid #1f6feb;
   padding-left: 10px;
   margin-top: 40px;
 }
@@ -38,30 +39,37 @@ h3 {
   color: #ffa657;
 }
 
-/* Módulos tipo bloque de código */
+/* Texto */
+p {
+  color: #c9d1d9;
+}
+
+/* Módulos */
 .module {
   background-color: #161b22;
   border: 1px solid #30363d;
-  border-left: 4px solid #238636;
-  padding: 15px;
-  margin-bottom: 20px;
-  border-radius: 6px;
+  border-left: 5px solid #2ea043;
+  padding: 18px;
+  margin-bottom: 25px;
+  border-radius: 8px;
   transition: all 0.2s ease;
   position: relative;
 }
 
-/* efecto hover tipo editor */
+/* Hover mejorado */
 .module:hover {
-  border-left: 4px solid #58a6ff;
-  transform: scale(1.01);
+  border-left: 5px solid #58a6ff;
+  background-color: #1c2128;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
 }
 
-/* Etiqueta tipo lenguaje */
+/* Etiqueta R */
 .module::before {
   content: "R";
   position: absolute;
-  top: 8px;
-  right: 10px;
+  top: 10px;
+  right: 12px;
   font-size: 0.7em;
   color: #8b949e;
 }
@@ -70,25 +78,27 @@ h3 {
 a {
   color: #58a6ff;
   text-decoration: none;
+  font-weight: bold;
 }
 
 a:hover {
+  color: #79c0ff;
   text-decoration: underline;
+}
+
+/* Código inline */
+code {
+  background: #21262d;
+  padding: 3px 6px;
+  border-radius: 4px;
+  color: #7ee787;
 }
 
 /* Footer */
 footer {
   text-align: center;
   padding: 20px;
-  font-size: 0.8em;
+  font-size: 0.85em;
   color: #8b949e;
   border-top: 1px solid #30363d;
-}
-
-/* Opcional: estilo código inline */
-code {
-  background: #21262d;
-  padding: 2px 6px;
-  border-radius: 4px;
-  color: #79c0ff;
 }
