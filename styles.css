@@ -2,83 +2,134 @@
 body {
   margin: 0;
   font-family: "Fira Code", "Courier New", monospace;
-  background-color: #0b0f14;
+  background:
+    linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px),
+    #0b0f14;
+  background-size: 26px 26px, 26px 26px, auto;
   color: #e6edf3;
-  line-height: 1.6;
+  line-height: 1.72;
 }
 
 /* Header */
 header {
-  background-color: #11161c;
-  color: #58a6ff;
-  padding: 30px;
+  background: linear-gradient(180deg, #11161c 0%, #0f1419 100%);
+  color: #5cc3ff;
+  padding: 38px 24px 32px;
   text-align: center;
-  border-bottom: 1px solid #30363d;
+  border-bottom: 1px solid #2a3139;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.28);
+}
+
+header h1 {
+  margin: 0 0 8px 0;
+  color: #6eb8f5;
+  font-size: 2.1rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+header p {
+  margin: 0;
+  color: #a6b6c6;
+  font-size: 0.98rem;
 }
 
 /* Contenedor */
 main {
   max-width: 900px;
-  margin: 30px auto;
-  padding: 20px;
+  margin: 42px auto;
+  padding: 0 22px;
 }
 
 /* Títulos */
 h1 {
-  color: #58a6ff;
+  color: #6eb8f5;
+  
 }
 
 h2 {
-  color: #79c0ff;
-  border-left: 5px solid #1f6feb;
-  padding-left: 10px;
-  margin-top: 40px;
+  color: #7fc0fa;
+  border-left: 4px solid #4c78a8;
+  padding-left: 12px;
+  margin-top: 46px;
+  margin-bottom: 18px;
+  font-size: 1.3rem;
+  font-weight: 1500;
 }
 
 h3 {
-  color: #ffa657;
+  color: #e8c882;
+  margin-top: 0;
+  margin-bottom: 12px;
+  font-size: 1.05rem;
+  font-weight: 700;
 }
 
 /* Texto */
+p, li {
+  color: #d8e1e6;
+  font-size: 0.98rem;
+}
+
 p {
-  color: #c9d1d9;
+  margin: 0 0 16px 0;
+}
+
+ul {
+  padding-left: 24px;
+  margin-top: 8px;
+  margin-bottom: 10px;
+}
+
+li {
+  margin-bottom: 8px;
 }
 
 /* Módulos */
 .module {
-  background-color: #161b22;
+  background: linear-gradient(180deg, #161b22 0%, #13181f 100%);
   border: 1px solid #30363d;
-  border-left: 5px solid #2ea043;
-  padding: 18px;
-  margin-bottom: 25px;
-  border-radius: 8px;
-  transition: all 0.2s ease;
+  border-left: 4px solid #505078;
+  padding: 24px 22px 20px;
+  margin-bottom: 30px;
+  border-radius: 10px;
+  padding: 38px 34px 42px;
+  transition: all 0.22s ease;
   position: relative;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.18);
+}
+
+/* Puntitos sutiles tipo ventana */
+.module::after {
+  content: "";
+  position: absolute;
+  top: 12px;
+  left: 14px;
+  width: 40px;
+  height: 10px;
+  background:
+    radial-gradient(circle at 6px 5px, #4b5563 0 4px, transparent 4px),
+    radial-gradient(circle at 20px 5px, #6b7280 0 4px, transparent 4px),
+    radial-gradient(circle at 34px 5px, #9ca3af 0 4px, transparent 4px);
+  opacity: 0.85;
 }
 
 /* Hover mejorado */
 .module:hover {
-  border-left: 5px solid #58a6ff;
-  background-color: #1c2128;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-}
-
-/* Etiqueta R */
-.module::before {
-  /* content: "R";*/
-  position: absolute;
-  top: 10px;
-  right: 12px;
-  font-size: 0.7em;
-  color: #8b949e;
+  border-left-color: #58a6ff;
+  border-color: #97C7C3;
+  background: linear-gradient(180deg, #1b2129 0%, #161c24 100%);
+  transform: translateY(-3px);
+  box-shadow: 0 10px 24px rgba(0,0,0,0.32);
 }
 
 /* Links */
 a {
-  color: #58a6ff;
+  color: #ABB1DB;
   text-decoration: none;
-  font-weight: bold;
+  font-weight: 520;
+  transition: color 0.5s ease;
 }
 
 a:hover {
@@ -90,15 +141,66 @@ a:hover {
 code {
   background: #21262d;
   padding: 3px 6px;
-  border-radius: 4px;
-  color: #7ee787;
+  border-radius: 5px;
+  color: #b8d3ff;
+  border: 1px solid #30363d;
+  font-size: 0.94em;
+}
+
+/* Bloques de código */
+pre {
+  background: #0d1117;
+  color: #e6edf3;
+  border: 1px solid #30363d;
+  border-left: 4px solid #4c78a8;
+  border-radius: 8px;
+  padding: 16px 18px;
+  overflow-x: auto;
+  font-family: "Fira Code", "Courier New", monospace;
+  font-size: 0.93rem;
+  line-height: 1.65;
+  margin-top: 12px;
+  margin-bottom: 8px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
+}
+
+pre code {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: inherit;
+}
+
+/* Botón copiar */
+.code-block {
+  position: relative;
+}
+
+.copy-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: #2b3340;
+  color: #dbe7f3;
+  border: 1px solid #404b59;
+  padding: 5px 10px;
+  font-size: 0.74rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.copy-btn:hover {
+  background: #394455;
+  border-color: #5a6b83;
 }
 
 /* Footer */
 footer {
   text-align: center;
-  padding: 20px;
+  padding: 26px 20px;
   font-size: 0.85em;
   color: #8b949e;
   border-top: 1px solid #30363d;
+  margin-top: 44px;
 }
