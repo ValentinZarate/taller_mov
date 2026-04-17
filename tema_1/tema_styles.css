@@ -66,7 +66,16 @@ header p {
   max-width: 600px;
   margin: 0 auto;
 }
+.header-gif {
+  position: absolute;
+  top: 10px;
+  right: 20px;
+}
 
+.header-gif img {
+  width: 190px;
+  height: auto;
+}
 
 /* Contenedor */
 main {
