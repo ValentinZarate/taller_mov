@@ -1,0 +1,245 @@
+/* Base */
+body {
+  margin: 0;
+  font-family: "Source Sans 3", "Segoe UI", Arial, sans-serif;
+  background:
+    linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px),
+    radial-gradient(circle at top, rgba(59, 130, 246, 0.08), transparent 22%),
+    linear-gradient(to bottom, #05070a 0%, #0b0f14 100%);
+  background-size: 26px 26px, 26px 26px, auto, auto;
+  color: #d8e1ea;
+  line-height: 1.75;
+}
+
+
+/* Header */
+header {
+  background: linear-gradient(135deg, #0D1622 0%, #0d1622 100%);
+  color: #f8fafc;
+  padding: 56px 20px 40px;
+  text-align: center;
+  border-bottom: 2px solid #3b82f6;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  position: relative;
+  overflow: hidden;
+}
+
+header::before {
+  content: "Datos, objetos y números complejos...";
+  position: absolute;
+  top: 14px;
+  left: 18px;
+  font-family: "Fira Code", "Courier New", monospace;
+  font-size: 0.98rem;
+  color: #60a5fa;
+  opacity: 0.85;
+}
+
+header::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, transparent 0%, rgba(96, 165, 250, 0.04) 50%, transparent 100%);
+  pointer-events: none;
+}
+
+header h1 {
+  margin: 0 0 8px 0;
+  font-size: 2.95rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  position: relative;
+  z-index: 1;
+}
+
+header p {
+  margin: 0;
+  font-size: 1.21rem;
+  color: #9fb0c3;
+  position: relative;
+  z-index: 1;
+  letter-spacing: 0.02em;
+  text-align: center;
+  max-width: 600px;
+  margin: 0 auto;
+}
+.header-gif {
+  position: absolute;
+  top: 10px;
+  right: 20px;
+}
+
+.header-gif img {
+  width: 260px;
+  height: auto;
+}
+
+/* Contenedor */
+main {
+  max-width: 920px;
+  margin: 52px auto;
+  padding: 0 24px;
+}
+
+/* Títulos */
+h2 {
+  font-size: 1.4rem;
+  color: #f8fafc;
+  margin-top: 46px;
+  margin-bottom: 18px;
+  padding-left: 14px;
+  border-left: 4px solid #3b82f6;
+  font-family: "Fira Code", "Courier New", monospace;
+}
+
+h3 {
+  font-size: 1.08rem;
+  color: #d0d9e4;
+  margin-top: 0;
+}
+
+/* Texto */
+p, li {
+  font-size: 1.04rem;
+  color: #c6d1dc;
+  max-width: 72ch;
+}
+
+ul {
+  padding-left: 22px;
+}
+
+/* Módulos */
+.module {
+  background: linear-gradient(180deg, rgba(11, 15, 20, 0.96) 0%, rgba(15, 23, 32, 0.96) 100%);
+  border: 1px solid #243244;
+  border-radius: 14px;
+  padding: 24px 26px;
+  margin-bottom: 28px;
+  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+  position: relative;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+}
+
+/* Hover */
+.module:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.26);
+  transform: translateY(-3px);
+}
+
+/* Puntitos tipo ventana, pero monocromáticos */
+.module::after {
+  content: "";
+  position: absolute;
+  top: 14px;
+  left: 18px;
+  width: 44px;
+  height: 10px;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 6px 5px, #475569 0 4px, transparent 4px),
+    radial-gradient(circle at 22px 5px, #64748b 0 4px, transparent 4px),
+    radial-gradient(circle at 38px 5px, #94a3b8 0 4px, transparent 4px);
+  opacity: 0.95;
+}
+
+/* Etiqueta R */
+.module::before {
+  content: "R";
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-family: "Fira Code", "Courier New", monospace;
+  color: #93c5fd;
+  background: rgba(59, 130, 246, 0.10);
+  border: 1px solid rgba(96, 165, 250, 0.25);
+  border-radius: 999px;
+  padding: 3px 9px;
+}
+
+/* Links */
+a {
+  color: #93c5fd;
+  text-decoration: none;
+  font-weight: 350;
+  transition: color 0.3s ease;
+}
+
+a:hover {
+  color: #bfdbfe;
+  text-decoration: underline;
+}
+
+/* Código inline */
+code {
+  font-family: "Fira Code", "Courier New", monospace;
+  font-size: 0.92em;
+  background: rgba(148, 163, 184, 0.08);
+  color: #c7d2fe;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+
+/* Bloques de código */
+pre {
+  background: #020617;
+  color: #e2e8f0;
+  border-radius: 12px;
+  padding: 16px 18px;
+  overflow-x: auto;
+  font-family: "Fira Code", "Courier New", monospace;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  border: 1px solid #1e293b;
+  border-left: 4px solid #3b82f6;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+}
+
+pre code {
+  background: transparent;
+  color: inherit;
+  border: 0;
+  padding: 0;
+  border-radius: 0;
+}
+
+/* Botón copiar */
+.code-block {
+  position: relative;
+}
+
+.copy-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(30, 58, 138, 0.18);
+  color: #dbeafe;
+  border: 1px solid rgba(96, 165, 250, 0.28);
+  padding: 5px 10px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  border-radius: 999px;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+}
+
+.copy-btn:hover {
+  background: rgba(30, 58, 138, 0.35);
+}
+
+/* Footer */
+footer {
+  text-align: center;
+  padding: 32px 20px;
+  font-size: 0.92rem;
+  color: #94a3b8;
+  border-top: 1px solid #1f2937;
+  margin-top: 54px;
+  background: rgba(2, 6, 23, 0.55);
+}
