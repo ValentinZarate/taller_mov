@@ -1,0 +1,569 @@
+---
+title: "Herramientas R"
+output:
+  html_document:
+    css: css/style2.css
+    highlight: haddock
+    toc: true
+    toc_float: true
+    number_sections: true
+    df_print: paged
+    includes:
+      in_header: css/header_fun.html
+  pdf_document:
+    toc: true
+---
+
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+<h1>Herramientas útiles</h1>
+
+<p>En algun curso me hicieron un repaso de las herramientas clásicas de R base para manejar bases de datos de manera iterativa o respetando ciertas estrcuturas lógicas predeterminadas... Además puse algunos ejemplos de cómo crear funciones en r, y como meter estas estrucuturas dentro de las mismas.</p>
+
+<h2>Estructuras de control</h2>
+
+<p>
+Las instrucciones como <code>for</code>, <code>if</code> y <code>while</code> se llaman
+<strong>estructuras de control</strong>.
+</p>
+
+<b>¿Qué es un <code>for</code> loop?</b>
+
+<p>
+Un <code>for</code> es una estructura de control que permite repetir una misma
+operación varias veces, cambiando algo en cada iteración.
+</p>
+
+<p>
+En R, se escribe así:
+</p>
+
+<p>
+<code>for (i in algo) { ... }</code>
+</p>
+
+<p>
+Podés pensarlo como:
+</p>
+
+<p>
+<b>“para cada elemento del objeto, hacé esto”</b>
+</p>
+
+```{r}
+for(i in 1:5) {
+  print(i)
+}
+```
+<p>
+Esto dice: “para cada número entre 1 y 5, imprimilo”.
+</p>
+
+```{r}
+for(i in 1:5) {
+  print(i + i/2)
+}
+```
+
+<p>a Cada elemento sumale su mitad</p>
+
+
+<ul>
+  <li><b>for</b>: indica repetición</li>
+  <li><b>i</b>: variable que va cambiando</li>
+  <li><b>1:5</b>: secuencia de valores</li>
+  <li><b>{ }</b>: bloque de código que se repite</li>
+</ul>
+
+<p>Cuando hicimos</p>
+
+```{r, eval=FALSE}
+for(i in 2:nrow(traj_df)) {
+  segments(...)
+}
+```
+
+<p>
+estamos diciendo:
+</p>
+
+<p>
+“para cada paso de la trayectoria, dibujá un segmento entre el punto anterior y el actual”
+</p>
+
+<ul>
+  <li>i = 2 → conecta punto 1 con 2</li>
+  <li>i = 3 → conecta punto 2 con 3</li>
+  <li>i = 4 → conecta punto 3 con 4</li>
+</ul>
+
+<p>
+Así se reconstruye toda la trayectoria.
+</p>
+
+<p>otro ejemplo de una estrucutra de control de R</p>
+
+```{r}
+x <- 5
+
+if (x > 10) {
+  print("grande")
+} else {
+  print("chico")
+}
+```
+
+```{r}
+i <- 1
+
+while (i <= 5) {
+  print(i)
+  i <- i + 1
+}
+```
+
+<p>“mientras esto sea cierto, seguí repitiendo”</p>
+
+```{r}
+i <- 1
+
+repeat {
+  print(i)
+  
+  if (i == 5) {
+    break
+  }
+  
+  i <- i + 1
+}
+```
+
+```{r}
+x <- 1
+
+repeat {
+  x <- x * 2
+  
+  if (x > 100) {
+    break
+  }
+}
+
+x
+```
+
+
+<h2>Iteración funcional</h2>
+
+<p>A diferencia de for/while, que son estructuras del lenguaje para controlar el flujo, <code>lapply</code>  y similares son funciones que automatizan el patrón ‘aplicar una función a muchos elementos’ y devolver el resultado en una estructura (lista, vector, etc.). Aunque explicitamente no son funciones, abajo vemos bien ejemplos de funciones. </p>
+
+```{r, eval=FALSE}
+lapply(X, FUN)
+```
+<ul>
+  <li><b>X</b>: lista o vector</li>
+  <li><b>FUN</b>: funcion que se aplica a cada elemento</li>
+  <li><b>Resultado</b>: siempre devuelve una <b>lista</b></li>
+</ul>
+
+```{r}
+numeros <- list(a = 1:3, b = 4:7, c = 10:12)
+lapply(numeros, mean)
+```
+<p>
+Interpretable como: "para cada elemento de la lista <code>numeros</code>, calcula la media".
+</p>
+
+```{r}
+textos <- list("puma", "guanaco", "condor")
+lapply(textos, nchar)
+```
+<p>
+Aunque pongamos una lista de caracteres, el patron es el mismo:
+aplicar una funcion a cada elemento.
+</p>
+
+<b>`sapply()`: simplifica el resultado cuando puede</b>
+
+<p>
+<code>sapply</code> hace lo mismo que <code>lapply</code>, pero intenta devolver
+un vector o una matriz en vez de lista.
+</p>
+
+```{r}
+lapply(numeros, mean)
+sapply(numeros, mean)
+```
+<p>
+Si cada resultado tiene longitud 1, <code>sapply</code> suele devolver vector.
+</p>
+
+<b>`vapply()`: como `sapply`, pero mas estricto y seguro</b>
+
+<p>
+Con <code>vapply</code> definimos de antemano el tipo de salida esperado.
+Esto evita errores silenciosos.
+</p>
+```{r}
+vapply(numeros, mean, FUN.VALUE = numeric(1))
+```
+<p>
+Si alguna salida no cumple ese formato, <code>vapply</code> corta con error.
+Por eso es util en scripts largos y analisis reproducibles.
+</p>
+
+<b>`tapply()`: aplicar por grupos</b>
+
+
+<p>
+<code>tapply</code> aplica una funcion sobre un vector, separado por grupos.
+</p>
+```{r}
+distancia <- c(3.2, 4.1, 2.9, 8.5, 7.7, 9.1)
+individuo <- c("A", "A", "A", "B", "B", "B")
+tapply(distancia, individuo, mean)
+```
+<p>
+Lectura: "calcular la media de distancia para cada individuo".
+</p>
+
+<b>`split()` + `lapply()`</b>
+
+
+<p>
+Cuando queremos trabajar por grupos pero con mas flexibilidad, una estrategia clasica es:
+</p>
+<p><code>split(data, grupo)</code> y luego <code>lapply(...)</code>.</p>
+
+```{r}
+df <- data.frame(
+  id = c("A", "A", "B", "B"),
+  paso = c(1, 2, 1, 2),
+  vel = c(0.8, 1.1, 1.5, 1.2)
+)
+por_id <- split(df, df$id)
+lapply(por_id, function(x) mean(x$vel))
+```
+<p>
+Esto divide el data frame por individuo y calcula una media para cada sub-data frame.
+</p>
+
+<b>`mapply()`: aplicar con varios argumentos a la vez</b>
+
+<p>
+<code>mapply</code> es una version "multivariada" de <code>sapply</code>.
+</p>
+```{r}
+x <- 1:4
+y <- c(10, 20, 30, 40)
+mapply(function(a, b) a + b, x, y)
+```
+<p>
+En cada iteracion combina un elemento de <code>x</code> con uno de <code>y</code>.
+</p>
+
+<b>For vs apply: cuando usar cada uno?</b>
+ 
+
+<ul>
+  <li><b>for</b>: cuando necesitamos control fino de cada paso (condiciones, indices, dibujo secuencial).</li>
+  <li><b>lapply/sapply/vapply</b>: cuando queremos aplicar una misma funcion a muchos elementos.</li>
+  <li><b>tapply</b>: cuando el problema es "calcular por grupos".</li>
+  <li><b>split + lapply</b>: cuando queremos trabajar por grupos con logica mas compleja.</li>
+</ul>
+
+<p>
+No hay una sola forma correcta. En analisis reales, se suelen combinar ambas estrategias.
+</p>
+
+
+<h2>Funciones en R</h2>
+
+
+<p>
+Una funcion es una forma de guardar un bloque de codigo para reutilizarlo. Básicamente es una forma de resumir un chorizo de script en una sola palabrita.. pero bueno, tienen su estrcutura y sus exigencias para poder funcionar correctamente.
+</p>
+
+<h3>Estructura basica</h3>
+
+
+```{r, eval=FALSE}
+nombre_funcion <- function(argumento1, argumento2) {
+  # codigo
+  resultado
+}
+```
+
+<ul>
+  <li><b>function(...)</b>: define los argumentos de entrada.</li>
+  <li><b>{ }</b>: bloque de codigo que se ejecuta.</li>
+  <li><b>resultado final</b>: lo que la funcion devuelve.; en varios casos puede no ir y da algo por default</li>
+</ul>
+
+<b>1) Ejemplo muy simple</b>
+
+```{r}
+sumar_dos <- function(x) {
+  x + 2
+}
+sumar_dos(5)
+sumar_dos(10)
+```
+<p>
+La funcion recibe <code>x</code> y devuelve <code>x + 2</code>.
+</p>
+
+2) Funcion con dos argumentos
+
+<p>No es nada raro, pero no podemos aplicar la función si no damos los dos argumentos </p>
+
+```{r}
+promedio_simple <- function(a, b) {
+  (a + b) / 2
+}
+promedio_simple(4, 8)
+```
+<p>
+Ahora la funcion combina dos entradas.
+</p>
+
+3) Argumentos con valor por defecto
+
+```{r}
+potencia <- function(x, exponente = 2) {
+  x ^ exponente
+}
+potencia(3)      # usa exponente = 2
+potencia(3, 3)   # exponente definido por usuario
+```
+<p>
+Los valores por defecto hacen funciones mas flexibles.
+</p>
+
+4) Funcion con validacion simple usando `if`
+
+```{r}
+velocidad_media <- function(distancia, tiempo) {
+  if (tiempo <= 0) {
+    return("Error: el tiempo debe ser mayor que 0")
+  }
+  distancia / tiempo
+}
+velocidad_media(100, 4)
+velocidad_media(100, 0)
+```
+
+<p>
+Esta version evita una division invalida y devuelve un mensaje claro.
+</p>
+
+5) Funcion que trabaja con vectores atómicos
+
+```{r}
+resumen_basico <- function(x) {
+  c(
+    n = length(x),
+    minimo = min(x),
+    media = mean(x),
+    maximo = max(x)
+  )
+}
+resumen_basico(c(3, 7, 2, 9, 5))
+```
+<p>
+Como en R casi todo es vectorizable, una sola funcion puede resumir muchos datos.
+</p>
+
+6) Funcion que usa un data frame
+
+```{r}
+media_por_columna <- function(df, columna) {
+  mean(df[[columna]], na.rm = TRUE)
+}
+datos <- data.frame(
+  id = c("A", "A", "B", "B"),
+  vel = c(1.2, 1.5, 0.9, NA)
+)
+media_por_columna(datos, "vel")
+```
+<p>
+<code>df[[columna]]</code> permite elegir columnas por nombre dentro de funciones.
+</p>
+
+7) Un paso mas: devolver varios resultados juntos
+
+```{r}
+resumen_mov <- function(x) {
+  list(
+    n = length(x),
+    media = mean(x, na.rm = TRUE),
+    desvio = sd(x, na.rm = TRUE),
+    q25 = quantile(x, 0.25, na.rm = TRUE),
+    q75 = quantile(x, 0.75, na.rm = TRUE)
+  )
+}
+resumen_mov(c(1.1, 2.4, 3.0, 2.2, NA, 4.1))
+```
+
+<p>
+Devolver una <code>list</code> es util cuando queremos varios outputs
+sin perder estructura.
+</p>
+
+<b> Ideas para extender funciones</b>
+
+<ul>
+  <li>Empeza con una version minima que funcione.</li>
+  <li>Agrega argumentos opcionales (valores por defecto).</li>
+  <li>Agrega validaciones con <code>if</code> para errores frecuentes.</li>
+  <li>Permiti trabajar con vectores o data frames.</li>
+  <li>Cuando haga falta, devolve una <code>list</code> con varios resultados.</li>
+</ul>
+
+<h2>`purrr::map()`</h2>
+
+<p>
+<code>purrr</code> (del tidyverse) ofrece funciones <code>map</code> que cumplen
+una idea muy parecida a <code>lapply</code>:
+</p>
+
+<p>
+<b>"aplicar una funcion a cada elemento de un objeto"</b>.
+</p>
+
+<p>
+La diferencia es que <code>purrr</code> tiene una familia muy consistente
+de funciones para controlar el tipo de salida.
+</p>
+
+```{r}
+library(purrr)
+```
+
+<b>Equivalencia rapida: `lapply` vs `map`</b>
+
+
+```{r}
+numeros <- list(a = 1:3, b = 4:7, c = 10:12)
+lapply(numeros, mean)
+map(numeros, mean)
+```
+
+<p>
+Ambas devuelven lista. En este caso son muy parecidas.
+</p>
+
+`map()`: devuelve lista
+
+```{r}
+map(numeros, ~ .x + 1)
+```
+
+<p>
+<code>.x</code> representa cada elemento de entrada.
+</p>
+
+<b>`map_dbl()`, `map_int()`, `map_chr()`, `map_lgl()`</b>
+
+<p>
+
+Estas variantes devuelven un tipo especifico:
+
+</p>
+<ul>
+  <li><b>map_dbl</b>: numeric/double</li>
+  <li><b>map_int</b>: integer</li>
+  <li><b>map_chr</b>: character</li>
+  <li><b>map_lgl</b>: logical</li>
+</ul>
+
+```{r}
+map_dbl(numeros, mean)
+map_int(numeros, length)
+map_chr(numeros, ~ paste(.x, collapse = "-"))
+```
+<p>
+Esto evita tener que simplificar manualmente despues.
+</p>
+
+<b>`map()` + `list_rbind()`: combinar resultados en data frame</b>
+
+<p>
+Muy util cuando cada iteracion genera una tabla y queremos unir todo.
+</p>
+
+```{r}
+ids <- c("A", "B", "C")
+resultados <- map(ids, function(id) {
+  data.frame(
+    id = id,
+    valor = nchar(id) * 10
+  )
+})
+list_rbind(resultados)
+```
+<p>
+Este patron aparece mucho en analisis: iterar, resumir y juntar.
+</p>
+
+<b>`map2()` y `pmap()`: cuando hay varias entradas</b>
+
+<p>
+<code>map2</code> recorre dos objetos en paralelo.
+</p>
+
+```{r}
+x <- c(1, 2, 3)
+y <- c(10, 20, 30)
+map2_dbl(x, y, ~ .x + .y)
+```
+
+<p>
+<code>pmap</code> generaliza a muchas columnas/argumentos.
+</p>
+
+```{r}
+parametros <- data.frame(
+  a = c(1, 2),
+  b = c(10, 20),
+  c = c(100, 200)
+)
+pmap_dbl(parametros, function(a, b, c) a + b + c)
+```
+
+<b>Formula corta `~` vs funcion explicita</b>
+
+<p>
+En <code>purrr</code> se puede escribir:
+</p>
+
+```{r}
+map_dbl(numeros, ~ mean(.x))
+```
+
+<p>
+o equivalente:
+</p>
+
+```{r}
+map_dbl(numeros, function(x) mean(x))
+```
+
+<p>
+Las dos formas son validas. La formula corta suele ser mas compacta.
+</p>
+
+<b>Cuándo usar base R y cuándo `purrr`?</b>
+
+<ul>
+  <li><b>Base R (`for`, `lapply`, `tapply`)</b>: siempre disponible, sin paquetes extra.</li>
+  <li><b>`purrr`</b>: sintaxis consistente, control explicito del tipo de salida, muy integrado al tidyverse.</li>
+</ul>
+
+<p>
+No es "uno o el otro": en practica, muchas personas combinan ambos enfoques.
+</p>

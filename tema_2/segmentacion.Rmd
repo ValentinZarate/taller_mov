@@ -1,0 +1,911 @@
+---
+title: "Segmentación - FPT y Lavielle"
+output:
+  html_document:
+    css: css/style2.css
+    highlight: haddock
+    toc: true
+    toc_float: true
+    number_sections: true
+    df_print: paged
+    includes:
+      in_header: css/header_seg.html
+  pdf_document:
+    toc: true
+---
+
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+<h1>Segmentación de Trayectorias</h1> 
+
+<p> Las métricas de resumen como velocidad o ángulo de giro nos permiten <b>describir</b> el movimiento e incluso clasificar comportamientos usando umbrales y pueden ser suficientes. Son útiles, pero tienen limitaciones claras, dependen de decisiones arbitrarias y no incorporan explícitamente la <b>incertidumbre</b> ni la <b>estructura temporal</b> de manera compleja. Sin embargo, vale la pena que esto es un gradiente, es posible segmentar la trayectoria con métricas de resumen con funciones autogestionadas y no necesariamente complicadas. Esta idea va un poco en la estrcutura del Notebook, desde el First Passage Time, que podemos ver la funcion explícita, mientras que en Lavielle se complica un poco más (aunque se podría) y en los modelos ocultos de markov se complica aun más.
+
+</p> 
+<p> Los métodos de segmentación y modelado (como <b>Lavielle</b> o <b>HMM</b>) mantienen la misma lógica, usar métricas, pero dan un paso más: pasan de una clasificación descriptiva a un enfoque de <b>inferencia estadística</b>, sea dentro del enfoque frecuentista o en el bayesiano o en un híbrido raro. </p> 
+
+<b>¿Qué agregan estos métodos?</b> 
+
+<ul> 
+<li><b>Menos arbitrariedad</b>: no dependen de umbrales fijos definidos a priori; aunque en bayesianos puede ser un poco "arbitrario"</li> 
+<li><b>Estructura temporal</b>: consideran que el movimiento ocurre en fases</li>
+<li><b>Inferencia</b>: permiten estimar parámetros del proceso</li>
+<li><b>Incertidumbre</b>: cuantifican qué tan seguros estamos (e.g., IC 95%)</li> 
+</ul>
+
+
+```{r}
+set.seed(123)
+
+n <- 500
+
+# Definimos varios segmentos con distinta dinámica
+segments <- list(
+  list(n = 80,  sd = 0.3, drift = c(0,   0)),   # cluster 1
+  list(n = 60,  sd = 1.2, drift = c(1.5, 0.5)), # tránsito
+  list(n = 90,  sd = 0.25, drift = c(0,  0)),   # cluster 2
+  list(n = 70,  sd = 1.5, drift = c(-1.2, 0.8)),# tránsito
+  list(n = 100, sd = 0.35, drift = c(0,  0)),   # cluster 3
+  list(n = 100, sd = 1.0, drift = c(0.8, -0.6)) # tránsito final
+)
+
+X <- c()
+Y <- c()
+
+x0 <- 0
+y0 <- 0
+
+for(seg in segments){
+  
+  dx <- arima.sim(n = seg$n, model = list(ar = 0.8), sd = seg$sd) + seg$drift[1]
+  dy <- arima.sim(n = seg$n, model = list(ar = 0.8), sd = seg$sd) + seg$drift[2]
+  
+  x <- x0 + cumsum(dx)
+  y <- y0 + cumsum(dy)
+  
+  X <- c(X, x)
+  Y <- c(Y, y)
+  
+  x0 <- tail(x, 1)
+  y0 <- tail(y, 1)
+}
+
+Z <- X + 1i * Y
+
+n <- length(Z)
+
+start <- as.POSIXct("2024-01-01 00:00:00", format = "%Y-%m-%d %H:%M:%S")
+
+t <- seq(from = start,
+         by = "60 mins",
+         length.out = n)
+
+df <- data.frame(
+  X = X,
+  Y = Y,
+  Z = Z,
+  t = t
+)
+
+plot(df$Z,
+     type = "o",
+     asp = 1,
+     pch = 16,
+     cex = 0.7,
+     col = "darkred",
+     xlab = "X",
+     ylab = "Y")
+```
+
+```{r}
+layout(rbind(c(1,2), c(1,3)))
+ with(df, {
+   plot(Y, Z, asp = 1, type="o")
+  plot(t, Y, type="o", xlab = "")
+   plot(t, X, type="o")
+ })
+```
+
+<h2>First Passage Time</h2>
+
+<p>El First Passage Time (FPT) puede ser bastante util para describir fases en la trayectoria estandarizando de acuerdo a radios especificos, e inclusive se puede modficar para ciertas formas</p>
+
+<p>Se define, aunque con leves variaciones, como el tiempo observado en el cual un animal pasa por un circulo de radio 'r'. </p>
+It is generally defined as the time observed for an animal to pass #' through a circle, with radius “r”, where “r” defines the scale of #' behavior.
+
+<p> El paquete que se suele usar para esto es adehabitatLT, sin embargo te mete en su mundito, como los otros... todavia podemos evitar eso y seguir trabajando con los objetos simples que describimos en el notebook de <a href="https://valentinzarate.github.io/taller_mov/tema_1/datos_objetos.html">Datos y objetos</a>. Sino tenemos que trabajar con un objeto tipo <code>traj</code> que son bastante retorcidos. 
+
+La función de abajo reemplaza a la del paquete y no nos lleva a cosas raras.. 
+
+ </p>
+```{r}
+fpt<- function(df, r){
+  
+  n <- nrow(df)
+  fpt <- rep(NA_real_, n)
+  
+  Z <- df$Z
+  
+  for(i in 1:(n - 1)){
+    
+    dist_i <- Mod(Z[(i + 1):n] - Z[i])
+    
+    salida <- which(dist_i > r)[1]
+    
+    if(!is.na(salida)){
+      
+      j <- i + salida
+      
+      fpt[i] <- as.numeric(
+        difftime(df$t[j], df$t[i], units = "hours")
+      )
+    }
+  }
+  
+  fpt
+}
+```
+
+<p>Aplicamos la función y en vez de devolvernos un coso raro nos agrega una columna numerica.. no queremos más que eso.. </p>
+
+<p> Esta función calcula el <b>First Passage Time</b> para cada punto de una trayectoria. </p>
+
+<p> La pregunta que responde es: </p> <p> <b>desde este punto, ¿cuánto tiempo tarda el animal en salir de un círculo de radio r?</b> </p> 
+<p> Como la trayectoria está escrita con números complejos: </p> <p> $$ Z = X + iY $$ </p> <p> cada punto tiene una posición en el plano. Entonces la distancia entre dos puntos se calcula como: </p> <p> $$ |Z_j - Z_i| $$ </p> 
+
+```{r}
+df$fpt_r10 <- fpt(df, r = 10)
+
+```
+
+<b>Paso a paso</b>
+
+<p> <code>n <- nrow(df)</code> </p> 
+
+<p> Cuenta cuántos puntos tiene la trayectoria. </p> 
+
+<p> <code>fpt <- rep(NA_real_, n)</code> </p>
+
+<p> Crea un vector vacío donde vamos a guardar el FPT de cada punto. </p> 
+
+<p> <code>Z <- df$Z</code> </p> 
+
+<p> Toma la trayectoria como coordenadas complejas. </p>
+
+<p> <code>for(i in 1:(n - 1))</code> </p>
+
+<p> Recorre cada punto de la trayectoria, excepto el último. </p>
+
+<p> <code>dist_i <- Mod(Z[(i + 1):n] - Z[i])</code> </p> 
+
+<p> Calcula la distancia desde el punto actual <code>i</code> hacia todos los puntos futuros. </p>
+
+<p> <code>salida <- which(dist_i > r)[1]</code> </p> 
+
+<p> Busca el primer punto futuro que esté a más distancia que el radio <code>r</code>. Ese es el momento en que el animal “sale” del círculo. </p> 
+
+<p> <code>j <- i + salida</code> </p>
+
+<p> Convierte esa posición relativa en el índice real dentro del data frame. </p>
+
+<p> <code>difftime(df$t[j], df$t[i], units = "hours")</code> </p>
+
+<p> Calcula cuánto tiempo pasó entre el punto inicial y el primer punto fuera del círculo. </p>
+
+```{r}
+thr <- median(df$fpt_r10, na.rm = TRUE)
+
+df$fpt_class <- ifelse(df$fpt_r10 > thr, "alto", "bajo")
+
+cols <- ifelse(df$fpt_class == "alto", "firebrick", "royalblue")
+
+plot(Re(df$Z), Im(df$Z),
+     type = "l",
+     col = "grey80",
+     asp = 1,
+     xlab = "X",
+     ylab = "Y",
+     main = "FPT (alto vs bajo)")
+
+points(Re(df$Z), Im(df$Z),
+       pch = 16,
+       col = cols)
+
+legend("topright",
+       legend = c("Tránsito (bajo FPT)", "Uso intensivo (alto FPT)"),
+       col = c("royalblue", "firebrick"),
+       pch = 16,
+       bty = "n")
+```
+<b>¿Qué define el radio?</b>
+
+<p> El radio <code>r</code> define la <b>escala espacial</b> del análisis. </p> 
+
+<p> Para cada punto, estamos preguntando: </p>
+
+<p> <b>¿cuánto tiempo tarda el individuo en salir de un círculo de radio r centrado en este punto?</b> </p>
+
+<p> Entonces: </p>
+
+<ul>
+<li>Un <b>radio chico</b> captura comportamiento muy local (micro-movimiento)</li> 
+<li>Un <b>radio grande</b> captura patrones más amplios (uso de área)</li>
+</ul> 
+
+<b>¿Cómo se asocia con el tiempo?</b> 
+
+<p> El FPT conecta directamente <b>espacio y tiempo</b>: </p>
+<p> $$ FPT(r) = \text{tiempo hasta salir de un círculo de radio } r $$ </p>
+<p> Esto implica que: </p> 
+<ul> 
+<li>Si el individuo se mueve rápido → sale rápido → <b>FPT bajo</b></li>
+<li>Si se queda dando vueltas → tarda más → <b>FPT alto</b></li>
+</ul>
+<p> Es clave entender que el tiempo no está fijado a priori: <b>emerge del movimiento</b>. El radio es fijo, pero el tiempo es la variable que medimos. </p>
+
+
+<p> El FPT nos dice algo muy concreto: </p> 
+<ul> 
+<li><b>Altos FPT</b>: zonas donde el individuo invierte tiempo → posible forrajeo, descanso, uso intensivo</li>
+<li><b>Bajos FPT</b>: zonas de paso → desplazamiento entre parches</li>
+</ul>
+
+<p> Por eso este método es muy usado para detectar <b>Area-Restricted Search (ARS)</b>, donde un animal reduce su velocidad y aumenta la tortuosidad en zonas de interés. </p>
+
+
+<h2>Segmentación con Lavielle</h2>
+
+<p> El método de Lavielle sirve para dividir una serie temporal en segmentos internamente homogéneos. En ecología del movimiento, esto puede ayudar a detectar fases donde una variable del movimiento cambia, por ejemplo velocidad, distancia entre pasos, ángulo de giro o FPT. </p>
+
+<p> La idea es buscar puntos de corte donde la serie cambia, pero sin cortar de más. Por eso el método balancea dos cosas: </p>
+
+<ul>
+<li><b>Ajuste:</b> que cada segmento sea lo más homogéneo posible.</li>
+<li><b>Complejidad:</b> no usar demasiados segmentos.</li>
+</ul>
+
+<h3>¿Qué optimiza Lavielle?</h3>
+
+<p> Para un número fijo de segmentos <code>k</code>, Lavielle busca la partición que minimiza el costo total: </p>
+
+<p>$$ C(k) = \sum_{s=1}^{k} c(segmento_s) $$</p>
+
+<p> Si usamos <code>type = "mean"</code>, el costo de cada segmento mide qué tan dispersos están los valores respecto a la media del propio segmento: </p>
+
+<p>$$ c(i,j) = \sum_{t=i}^{j} (x_t - \bar{x}_{i:j})^2 $$</p>
+
+<p> Es decir, un segmento tiene bajo costo si sus valores son parecidos entre sí. Tiene alto costo si dentro del tramo hay cambios fuertes. </p>
+
+<p> Lavielle hace una <b>optimización global</b>: busca la mejor combinación de cortes para toda la serie. Un corte se acepta porque mejora la segmentación completa, no solo porque alrededor de ese punto haya una diferencia local. </p>
+
+<h3>Las matrices internas</h3>
+
+<p><code>contmat</code>: costo de cada tramo posible</p>
+
+<p> La matriz <code>contmat</code> guarda el costo de considerar el tramo desde <code>i</code> hasta <code>j</code> como un único segmento: </p>
+
+<p>$$ contmat[i,j] = c(i,j) $$</p>
+
+<ul>
+<li><code>contmat[i,j]</code> bajo → el tramo <code>i:j</code> es homogéneo.</li>
+<li><code>contmat[i,j]</code> alto → el tramo <code>i:j</code> probablemente contiene cambios internos.</li>
+</ul>
+
+<p><code>sumcont</code>: mejor costo acumulado</p>
+
+<p> La matriz <code>sumcont</code> guarda el costo mínimo de segmentar la serie hasta cierto punto usando cierto número de segmentos. </p>
+
+<p> Conceptualmente: </p>
+
+<p>$$ sumcont[k,j] = \min_i \left( sumcont[k-1,i] + contmat[i+1,j] \right) $$</p>
+
+<p> Esto es programación dinámica: para encontrar la mejor solución grande, el algoritmo reutiliza mejores soluciones más chicas. </p>
+
+<p><code>matpath</code>: dónde cortar</p>
+
+<p> Mientras calcula el mínimo anterior, el algoritmo guarda qué valor de <code>i</code> produjo el mejor resultado. Eso queda en <code>matpath</code>. </p>
+
+<ul>
+<li><code>sumcont</code> dice cuánto cuesta la mejor segmentación.</li>
+<li><code>matpath</code> dice dónde están los cortes que producen ese costo.</li>
+</ul>
+
+<p> Luego, mediante backtracking, se reconstruyen los <i>breakpoints</i>. </p>
+
+<h3>¿cuántos segmentos usar?</h3>
+
+<p> Lavielle puede encontrar la mejor segmentación para <code>k = 1</code>, <code>k = 2</code>, <code>k = 3</code>, etc. Pero todavía queda decidir cuál <code>k</code> conviene usar. </p>
+
+<p> A medida que aumenta <code>k</code>, el costo siempre baja o se mantiene, porque más segmentos permiten ajustar mejor los datos. El problema es que demasiados segmentos pueden representar ruido y no cambios ecológicamente relevantes. </p>
+
+<p> Por eso se busca un equilibrio similar a: </p>
+
+<p>$$ J(k) = C(k) + \lambda k $$</p>
+
+<p> Donde <code>C(k)</code> mide el ajuste y <code>k</code> representa la complejidad. En este contexto, la complejidad se mide de forma simple: más segmentos significan un modelo más flexible. </p>
+
+<p> La función <code>chooseseg</code> ayuda a elegir un número razonable de segmentos mirando la curva de costo: al principio agregar segmentos mejora mucho el ajuste; después, cada segmento nuevo mejora poco. Ese punto de cambio es el criterio práctico para elegir <code>k</code>. </p>
+
+<h3>Comparación con verosimilitud</h3>
+
+<p> Lavielle no necesita formular explícitamente una verosimilitud como en un modelo estadístico clásico. Trabaja con una función de costo. </p>
+
+<p> Sin embargo, cuando el costo es una suma de cuadrados respecto a la media, la lógica es parecida a maximizar una verosimilitud gaussiana: minimizar la suma de cuadrados equivale, bajo ciertos supuestos, a maximizar el ajuste de un modelo normal con media constante dentro de cada segmento. </p>
+
+<p> La diferencia práctica es que Lavielle lo plantea de forma más general: no obliga a escribir todo el modelo probabilístico, sino que optimiza una función de contraste o costo. </p>
+
+<b>Interpretación ecológica</b>
+
+<p> Los segmentos no son automáticamente “comportamientos reales”. Son tramos homogéneos según la variable usada para segmentar. </p>
+
+<p> Por ejemplo, si segmentamos velocidad, los cortes indican cambios en el patrón de velocidad. Eso puede sugerir cambios de comportamiento, pero la interpretación ecológica requiere mirar el contexto: hábitat, hora, individuo, estado reproductivo, disponibilidad de recursos u otras variables del movimiento. </p>
+
+<b>Resumen</b>
+
+<p> Lavielle segmenta una serie buscando la mejor combinación global de cortes. Primero calcula el costo de todos los tramos posibles en <code>contmat</code>. Luego usa programación dinámica para obtener el mejor costo acumulado en <code>sumcont</code>. Al mismo tiempo guarda en <code>matpath</code> dónde están los cortes óptimos. Finalmente, <code>chooseseg</code> ayuda a decidir cuántos segmentos conservar, evitando tanto una serie demasiado simple como una sobresegmentada. </p>
+
+```{r}
+require(adehabitatLT)
+require(lubridate)
+require(dplyr)
+
+pepe <- function(df){
+  df |> mutate(Month = month(t),
+               doy = yday(t),
+               hour = hour(t),
+               Z = X + 1i*Y,
+               Step = c(NA, diff(Z)),
+               StepLength = Mod(Step),
+               dTime = c(NA, difftime(t[-1],
+                                      t[-length(t)],
+                                      units = "hours")),
+               Speed = StepLength/dTime,
+               Orientation = Arg(Step),
+               TurningAngle = c(NA, diff(Orientation))
+  )
+}
+
+```
+
+```{r}
+df <- pepe(df)
+```
+
+<b>Primer paso: ajustar el modelo</b>
+
+```{r}
+Y <- df$Y
+
+df_l <- lavielle(Y, Lmin = 20, Kmax = 10, type = "mean")
+
+class(df_l)
+df_l
+```
+
+<p> Acá definimos los parámetros clave del algoritmo: </p> 
+
+<ul>
+<li><code>Lmin</code>: tamaño mínimo de segmento (evita sobresegmentar)</li> 
+<li><code>Kmax</code>: número máximo de segmentos a evaluar</li> 
+<li><code>type = "mean"</code>: detecta cambios en la media</li> 
+</ul> 
+
+<p> Para cada <code>k</code>, Lavielle busca la mejor segmentación posible minimizando: </p>
+
+<p> $$ C(k) = \sum c(segmento) $$ </p>
+
+<p> donde el costo mide la heterogeneidad interna (ej: suma de cuadrados respecto a la media). </p>
+
+<b>¿Cómo decide cuántos segmentos?</b> 
+
+<p> Más segmentos → mejor ajuste, pero más complejidad. </p>
+<p> Menos segmentos → más simple, pero peor ajuste. </p>
+
+<p> Se balancea con: </p>
+
+<p> $$ J(k) = C(k) + \lambda k $$ </p>
+
+<p> Acá <code>k</code> mide directamente la complejidad. No se usa una verosimilitud explícita, aunque con <code>type="mean"</code> el costo es equivalente a minimizar una log-verosimilitud gaussiana. </p>
+
+
+```{r, fig.width = 9, fig.height = 3.5}
+
+par(mfrow = c(1, 3), mar = c(4, 4, 2, 1))
+
+# contmat
+image(t(df_l$contmat[nrow(df_l$contmat):1, ]),
+      main = "contmat (costo)",
+      xlab = "j", ylab = "i",
+      col = heat.colors(50))
+
+# sumcont
+image(t(df_l$sumcont[nrow(df_l$sumcont):1, ]),
+      main = "sumcont (acumulado)",
+      xlab = "j", ylab = "k",
+      col = heat.colors(50))
+
+# matpath
+image(t(df_l$matpath[nrow(df_l$matpath):1, ]),
+      main = "matpath (cortes)",
+      xlab = "j", ylab = "k",
+      col = heat.colors(50))
+dev.off()
+```
+
+<p> Cuando usamos <code>chooseseg()</code>, lo que vemos en el gráfico es justamente ese criterio: </p> 
+
+<p> $$ J(k) = \text{costo}(k) + \lambda \cdot k $$ </p>
+
+<p> En el eje X está el número de segmentos (<code>K</code>) y en el eje Y el valor de <code>J(k)</code>. </p> 
+
+<p> La lógica es: </p> 
+<ul> 
+<li>Al principio, agregar segmentos reduce mucho el costo (mejor ajuste)</li>
+<li>Después, la mejora es cada vez menor</li> <li>La penalización empieza a dominar</li>
+</ul>
+
+<p> Entonces buscamos el punto donde: </p>
+
+<p> <b>agregar más segmentos ya no mejora sustancialmente el modelo</b> </p> 
+<p> En el gráfico que obtuviste, se ve claramente: </p>
+<ul>
+<li>Una caída muy fuerte entre K = 1 y K = 2</li> 
+<li>Luego una desaceleración progresiva</li> 
+<li>A partir de cierto K, la curva se aplana</li> 
+</ul> 
+
+<p> Ese “codo” (el <i>elbow</i>) es la clave: </p>
+
+<p> <b>ese es el número óptimo de segmentos</b> </p>
+
+<b>Interpretación práctica</b>
+
+<p> <code>chooseseg()</code> automatiza esto, pero conceptualmente estás eligiendo: </p> 
+
+<ul>
+<li>el modelo más simple posible</li>
+<li>que aún captura los cambios importantes en la serie</li>
+</ul> <p> En términos ecológicos: </p>
+
+<p> <b>cuántas fases de comportamiento tiene la trayectoria sin sobreinterpretar ruido</b> </p>
+
+```{r}
+chooseseg(df_l)
+```
+<p> Luego de <code>chooseseg()</code>, tenemos que decidir cuántos segmentos usar. El valor <code>J(k)</code> representa el <b>costo total de la segmentación</b>, combinando qué tan bien ajusta el modelo con cuán complejo es. </p> <p> Al aumentar <code>K</code>, el costo baja porque el ajuste mejora, pero llega un punto donde esa mejora es cada vez menor. </p>
+
+<p> Por eso buscamos el <b>“codo” de la curva</b>: el número de segmentos a partir del cual agregar más segmentos <b>ya no reduce significativamente el costo</b>. </p> 
+
+<p> En este caso, ese punto está alrededor de <b>K = 2 o 3</b>, lo que sugiere que la trayectoria puede describirse bien con ese número de fases sin sobreajustar el ruido. </p>
+
+```{r}
+df_l_path <- findpath(df_l, 3)
+```
+
+
+```{r}
+breakpoints <- do.call(rbind, df_l_path)
+```
+
+<p>Genero los cortes donde corresponde y lo agrego a la df como "phases".</p>
+
+```{r}
+cuts <- c(breakpoints[,1]-.5, nrow(df))
+df <- df |>
+  mutate(Row_ID = 1:nrow(df),
+         phase = cut(Row_ID,
+                     breaks = cuts,
+                     labels = 1:nrow(breakpoints)))
+```
+
+```{r}
+require(ggplot2)
+ggplot(data=df, aes(x=t, y=Y)) +
+  geom_path(col = "grey") +
+  geom_point(aes(color = phase)) +
+  theme_classic()
+```
+
+
+```{r}
+ggplot(data=df, aes(x=X, y=Y)) +
+   geom_path(col = "grey") + 
+   geom_point(aes(color = phase)) + 
+   theme_classic()
+```
+
+<h2>Ejemplo Movebank</h2>
+
+<p>Para hacerlo en datos reales vamos a usar una base de datos descargada de movebank... de <i>Alces alces</i> monitoreados en el noroeste de USA. </p>
+
+<img src="figures/moose_mb.png" width="100%">
+
+```{r}
+moose <- read.csv("data/tables/moose2.csv")
+```
+
+<p>Vemos un poco la estrucutra del dataset</p>
+
+```{r}
+str(moose)
+```
+<p>Tipicos nombres de MoveBank, algunos son bastante incomodos.. además el timestamp está como caracter</p>
+
+```{r}
+length(unique(moose$individual.local.identifier))
+```
+<p>Tenemos 19 alces... </p>
+
+
+<p>vamos a formatear el tiempo, renombrar columnas, estimar UTMs (para tener nuestro Z) y recién ahí usamos la función de arriba para estimar todo lo que pudiese a llegar a ser útil</p>
+
+```{r}
+require(sf)
+
+moose$t <- as.POSIXct(moose$timestamp, format = "%Y-%m-%d %H:%M:%S")
+
+moose <- moose |> rename(id = individual.local.identifier,
+                         lat = location.lat,
+                         lon = location.long) |> 
+  select(id, lat, lon, t)
+
+moose$id <- as.factor(moose$id)
+
+
+moose_sf <- sf::st_as_sf(moose,
+                         coords = c("lon", "lat"),
+                         crs = 4326)
+
+
+coords <- st_coordinates(moose_sf)
+
+lon <- coords[,1]
+lat <- coords[,2]
+
+zone <- floor((mean(lon) + 180) / 6) + 1
+
+zone
+
+```
+
+<p>Bien, tenemos la df con nombres más comodos y que cumplen con la función de resumen. Además sabemos que está en la zona 11 UTM. como esta en el hemiferio norte sabemos que el código EPSG es 32611.</p>
+
+<p>vamos a extraer las coordenadas UTM y luego pegarse las a la df principal como X e Y, de paso calculamos el numero complejo y tenemos lo básico para implementar la funcion pepe. </p>
+
+```{r}
+
+moose_utm <- st_transform(moose_sf, crs = 32611) 
+
+
+xy <- st_coordinates(moose_utm)
+
+moose$X <- xy[,1]
+moose$Y <- xy[,2]
+
+moose$Z <- moose$X + 1i * moose$Y
+
+moose <- pepe(moose)
+```
+
+<p>Algo muy importante es ver qué tan regulares fueron los datos, si vemos velocidades estp es central...</p>
+
+```{r}
+moose <- moose |> 
+  arrange(id, t) |> 
+  group_by(id) |> 
+  mutate(
+    dt_m = c(NA, as.numeric(diff(t), units = "mins"))
+  ) |> 
+  ungroup()
+```
+
+```{r}
+summary(moose$dt_m)
+```
+<p>todo parece estar bastante bien, alrededor de 2 horas de resolucion temporal, con un desvío razonable hasta el 3er cuartil, desp se pudre. Se ve que hay un gap muy grande en algun momento.</p>
+
+<p>Acá abajo vamos a filtrar ese gap.... le tiramos un gap de 6 horas como maximo, podría ser menos tranquilamente, pero buneo.</p>
+
+<p>Aca primero organizamos por id, luego eso lo organizamos por t.. por default eso va de menor a mayor. Agrupamos por individuos para calcularle el dt_m y crear una columna de TRUE, FALSE si el gap es o no mayor a las 6 horas.. luego filtramos </p>
+
+```{r}
+gap_thr_m <- 6 * 60
+
+moose <- moose |> 
+  arrange(id, t)  |> 
+  group_by(id)  |> 
+  mutate(
+    dt_m = c(NA, as.numeric(diff(t), units = "mins")),
+    gap_grande = dt_m > gap_thr_m
+  ) |> 
+  ungroup()
+
+moose <- moose  |> 
+  filter(is.na(gap_grande) | gap_grande == FALSE)
+```
+
+```{r}
+summary(moose$dt_m)
+
+```
+<p> mucho mejor</p>
+
+
+```{r}
+hist(moose$dt_m,
+     breaks  = 100, 
+     col = "grey66",
+     border = "black")
+```
+<p>Bueno, aca sale otra cosa... hay dos resoluciones muy claras, seguramente son distintas programaciones. Ahora vamos a quedarnos con el más fino</p>
+
+```{r}
+moose <- moose |> filter(dt_m < 150)
+```
+
+```{r}
+hist(moose$dt_m,
+     breaks = 50,
+     col = "grey55",
+     xlim = c(118,123),
+     freq = FALSE)
+
+```
+<p>Mapeemos</p>
+
+```{r}
+library(tmap)
+library(viridis)
+
+mooose_sf <- st_as_sf(moose, coords = c("lon", "lat"), crs = 4326)
+
+ids <- levels(moose_sf$id)
+
+pal <- viridis(
+  n = length(ids),
+  option = "C")
+
+tmap_mode("plot")
+
+tm_shape(moose_sf) +
+  tm_basemap("Esri.WorldImagery", alpha = 0.9) +
+  
+  tm_dots(
+    col = "black",
+    size = 0.45,
+    alpha = 0.8
+  ) +
+  
+  tm_dots(
+    col = "id",
+    style = "cat",
+    palette = pal,
+    size = 0.3,
+    alpha = 0.8,
+    legend.show = FALSE
+  ) + 
+  tm_layout(
+    bg.color = "#0b0f14",
+    outer.bg.color = "#0b0f14",
+    frame = FALSE
+  )
+
+```
+
+<p>Vamos con un solo individuo, después podemos ver todos</p>
+
+```{r}
+moose |> group_by(id) |> summarize(n = n())
+
+``` 
+
+<p>todos bastante bien, pero vamos con uno intermedio, 28 con 3885 locs. De ahora mas se llama vaca</p>
+
+```{r}
+vaca_sf <- moose_sf |> filter(id == "28")
+```
+
+```{r}
+mapview::mapview(vaca_sf,
+                 color = "black",
+                 col.regions ="gold",
+                 lwd = 2,
+                 map.types = "Esri.WorldImagery" )
+```
+
+```{r}
+vaca <- moose |> filter(id == "28")
+```
+
+<p>Beuno, tenemos a vaca con muchas metricas calculadas y aparentemente una buena dt (2 horas)</p>
+
+<p>Vamos a hacer un fpt y un lavielle</p>
+
+```{r}
+str(vaca)
+```
+
+<p>Acá vamos a hacer un fpt para distintos radios en metros.. básicamente nos va a calcuar para cada localizacion de vaca cuánto tarde en salir de un buffer de X m </p>
+
+```{r}
+vaca <- vaca |> 
+  arrange(id, t)  |> 
+  group_by(id) |> 
+  mutate(
+    fpt_r100  = fpt(cur_data(), r = 100),
+    fpt_r500  = fpt(cur_data(), r = 500),
+    fpt_r1000 = fpt(cur_data(), r = 1000),
+    fpt_r2000 = fpt(cur_data(), r = 2000)
+  ) |> 
+  ungroup()
+```
+
+<b>¿Cómo interpretar el valor de FPT?</b>
+
+<p> En la función original de arriba definimos explícitamente: </p>
+
+<p> <code>difftime(..., units = "hours")</code> </p>
+<p> Entonces el resultado está en <b>horas</b>. 
+</p> 
+
+<b>Interpretación directa</b>
+
+<p> Si el primer valor de <code>fpt_r1000 = 72</code>, significa: </p>
+<p> <b>el caribou tardó 72 horas en salir de un círculo de 1000 m alrededor de ese punto</b> </p> 
+
+<b>Llevado a la resolución temporal</b>
+
+<p> Como los datos tienen fixes cada <b>2 horas</b>: </p> 
+<ul>
+<li>72 horas ≈ 36 fixes</li>
+</ul>
+<p> O sea, durante ~36 observaciones consecutivas el animal se mantuvo dentro de ese radio. </p>
+
+<h4>Interpretación ecológica</h4>
+
+<p> Eso es una señal fuerte de: </p>
+<ul>
+<li><b>uso intensivo del espacio</b></li>
+<li>probablemente <b>forrajeo</b> o permanencia en un parche</li>
+</ul> 
+
+<b>Comparación intuitiva</b>
+<ul> 
+<li>FPT = 2–4 → pasa rápido (tránsito)</li>
+<li>FPT = 10–20 → uso moderado</li> 
+<li>FPT = 50+ → permanencia clara en un área</li> 
+</ul>
+
+<p> Una aclaración, el FPT no depende directamente de la velocidad instantánea, sino de cuánto tiempo el animal <b>permanece espacialmente contenido</b> dentro de ese radio. Es decir, puede estar moviendose super rápido dentro de ese radio y no salir. </p>
+
+<p>Vamos a segmentar de una manera muy simple, dividamos en dos a partir de la mediana.</p>
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+vaca_fpt_long <- vaca |> 
+  select(id, t, X, Y, starts_with("fpt_r")) |> 
+  pivot_longer(
+    cols = starts_with("fpt_r"),
+    names_to = "radio",
+    values_to = "fpt_h") |> 
+  mutate(
+    radio = factor(radio, levels = c("fpt_r100", "fpt_r500", "fpt_r1000", "fpt_r2000")),
+    fpt_class = ifelse(
+      fpt_h > median(fpt_h, na.rm = TRUE),
+      "alto FPT",
+      "bajo FPT"))
+```
+
+<p>alternativa de más cortes</p>
+
+```{r, eval=FALSE}
+vaca_fpt_long <- vaca |> 
+  select(id, t, X, Y, starts_with("fpt_r")) |> 
+  pivot_longer(
+    cols = starts_with("fpt_r"),
+    names_to = "radio",
+    values_to = "fpt_h" ) |> 
+  mutate(
+    radio = factor(
+      radio, 
+      levels = c("fpt_r100", "fpt_r500", "fpt_r1000", "fpt_r2000")),
+    cuts = quantile(fpt_h, probs = c(0, 1/3, 2/3, 1), na.rm = TRUE),
+    fpt_class = cut(
+      fpt_h,
+      breaks = cuts,
+      include.lowest = TRUE,
+      labels = c("bajo FPT", "medio FPT", "alto FPT")))
+```
+
+```{r}
+ggplot(vaca_fpt_long, aes(X, Y)) +
+  geom_path(aes(group = interaction(id, radio)),
+            color = "grey75",
+            linewidth = 0.3) +
+  geom_point(aes(color = fpt_class),
+             size = 0.8,
+             alpha = 0.8) +
+  facet_wrap(~ radio) +
+  coord_equal() +
+  scale_color_manual(
+    values = c("bajo FPT" = "blue", "alto FPT" = "red")
+  ) +
+  labs(
+    x = "X UTM",
+    y = "Y UTM",
+    color = "Clase FPT",
+    title = "First Passage Time por radio"
+  ) +
+  theme_bw()
+```
+
+<p> <b>Lavielle</b> </p>
+
+<p>Vamos a usar Speed para esto, tiene más logica que la latitud</p>
+
+
+```{r}
+speed <- vaca$Speed
+
+vaca_l <- lavielle(speed, Lmin = 20, Kmax = 20, type = "mean")
+
+vaca_l
+```
+
+
+```{r}
+chooseseg(vaca_l)
+```
+
+<p>Medio arbitrario pero vamos con un numero bajo para que sea interpretable.. de 1 a 3 hya un quiebre importante, asi que vamos a poner 3... sabiendo que entre 3 y 5 esperamos que las velocidades no sean tan diferentes</p>
+
+
+```{r}
+vaca_l_path <- findpath(vaca_l, 3)
+
+```
+
+<p>Para aclarar, vaca_l_path es una lista.. y cada elemento contiene los breakpoints para un valor k (número de semgmentos). do.call lo que es como una "distributiva" para una función... es decir hace esto -- do.call(funcion, lista) es funcion(lista[[1]], lista[[2]], lista[[3]], ...).. en este caso la funcion es rbind, que simplemente apila filas </p>
+
+```{r}
+breakpoints <- do.call(rbind, vaca_l_path)
+class(breakpoints)
+```
+
+<p>Aca hacemos unos cuts para la primera columna, que es donde estan los cortes.. el -.5 simplemente es para evitar la ambiguedad de los numeros enteros.. cut() trabaja con numeros continos pero los datos son enteros... con cortes exactos como 10 o 25, puede haber ambiguedad.. 10 es de un semgemnto o del anterior? entonces si hacemos 9.5 es más claro, esto mueve los cortes entre los enteros.</p>
+
+```{r}
+cuts <- c(breakpoints[,1]-.5, nrow(vaca))
+vaca <- vaca |>
+  mutate(Row_ID = 1:nrow(vaca),
+         phase = cut(Row_ID,
+                     breaks = cuts,
+                     labels = 1:nrow(breakpoints)))
+```
+
+```{r}
+ggplot(data=vaca, aes(x=X, y=Y)) +
+  geom_path(col = "grey") +
+  geom_point(aes(fill = phase),
+             size = 3,
+             shape = 21,
+             color = "black",
+             linewidth = 6) +
+  theme_classic()
+```
+
+
+```{r}
+vaca |> group_by(phase) |> 
+  summarise(mean = (mean(Speed)/60))
+```
+
+
+
+

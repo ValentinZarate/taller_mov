@@ -1,0 +1,1309 @@
+---
+title: "Métricas de Resumen"
+output:
+  html_document:
+    css: css/style2.css
+    highlight: haddock
+    toc: true
+    toc_float: true
+    number_sections: true
+    df_print: paged
+    includes:
+      in_header: css/header.html
+  pdf_document:
+    toc: true
+---
+
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+<h1>Métricas</h1>
+
+<p>
+En este notebook vamos a ir viendo algunas <b>métricas de resumen de trayectorias</b>,
+es decir, formas simples de describir cómo se mueve un individuo en el espacio.
+</p>
+
+<p>
+El objetivo no es solo calcular números a rolete, sino entender de dónde salen y <b>qué nos dicen ecológicamente</b>:
+¿el individuo se mueve mucho o poco? ¿se desplaza de forma direccional o explora localmente?
+¿usa un área pequeña o grande? ¿tiene recurrencia hacia ciertos luegares? ¿se ven estadios de movimiento?
+</p>
+
+<p>
+Vamos a empezar con una trayectoria simple simulada como para que sea bien transparente entender los cálculos. Son exactamente los mismos conceptos y herramientas que aplican a datos reales, como vamos a ver usando un ejemplo de 
+<a href="https://www.movebank.org/cms/movebank-main">MoveBank</a>.
+</p>
+
+<p>
+La idea entonces es construir paso a paso:
+</p>
+
+<ul>
+  <li>Una trayectoria</li>
+  <li>Métricas locales (paso a paso)</li>
+  <li>Métricas globales (resumen de toda la trayectoria)</li>
+  <li>Ejemplo de movebank</li>
+</ul>
+
+<p>
+Esto nos va a servir como base para el siguiente notebook, donde vamos a ver algunos métodos de <b>segmentación</b> de la trayectoria. Es decir, usando estas métricas de resumen vamos a ver cómo detectar automáticamente distintos comportamientos dentro de una trayectoria usando métodos un poco más complejos.
+</p>
+
+```{r}
+X <- cumsum(arima.sim(n=500, model=list (ar=0.8)))
+Y <- cumsum(arima.sim(n=500, model=list (ar=0.8)))
+
+Z <- X + 1i * Y
+
+plot(Z,
+     type = "o",
+     asp = 1,
+     col = "darkred")
+
+```
+
+<p>Acá hicimos lo mismo que antes, nada raro... vamos con 500 filas para que sea un poco más interesante</p>
+
+<p>Le sumamos variable tiempo con un poco de realidad. Lo unico que cambió es que le puse una fecha de comienzo. as.POSIXct lo convierte en formato fecha. como está en ese formato podemos aplicar algunas funciones internas de 'seq' detallando cosas como <code>by = "60 mins</code>.
+
+Después sumo el tiempo a la df.
+</p>
+
+```{r}
+n <- length(Z)
+start <- as.POSIXct("2024-01-01 00:00:00", format = "%Y-%m-%d %H:%M:%S")
+
+t <- seq(from = start,
+         by = "60 mins",
+         length.out = n)
+
+
+df <- data.frame(
+  X = X,
+  Y = Y,
+  Z = Z,
+  t = t)
+
+```
+
+<h2>Métricas locales del movimiento</h2>
+
+<p>
+Una vez que tenemos la trayectoria, el siguiente paso es describir el movimiento
+<b>entre posiciones consecutivas</b>. Seguimos con la misma lógica que antes, vectores represetados como números complejos.
+</p>
+
+<p>
+Estas métricas se calculan a escala local (paso a paso) y son fundamentales
+para entender cómo se mueve el individuo en el tiempo.
+</p>
+
+<p>
+En lugar de mirar toda la trayectoria de una vez, ahora analizamos:
+</p>
+
+<ul>
+  <li>cuánto se mueve entre dos puntos</li>
+  <li>en qué dirección se mueve</li>
+  <li>cómo cambia esa dirección</li>
+  <li>qué tan rápido se mueve</li>
+</ul>
+
+<p>Es lo mismo que ya hicimos en el notebook de <a href="https://valentinzarate.github.io/taller_mov/tema_1/num_com.html">números complejos</a>, pero nunca está de más un repaso. </p>
+
+```{r}
+steps <- diff(Z)
+
+# Step length: distancia recorrida en cada paso
+step_length <- Mod(steps)
+
+# Dirección absoluta de cada paso
+theta <- Arg(steps)
+
+# Turning angle: cambio de dirección entre pasos consecutivos
+turning_angle <- diff(theta)
+
+# Corregimos ángulos para que queden entre -pi y pi
+turning_angle <- atan2(sin(turning_angle), cos(turning_angle))
+
+# Intervalo de tiempo en horas
+dt_horas <- as.numeric(diff(t), units = "hours")
+
+# Velocidad
+velocidad <- step_length / dt_horas
+```
+
+<p>Guardaoms una tabla de resumen por las dudas</p>
+
+```{r}
+mov <- data.frame(
+  tiempo_inicio = t[-n],
+  tiempo_fin = t[-1],
+  X_inicio = Re(Z[-n]),
+  Y_inicio = Im(Z[-n]),
+  X_fin = Re(Z[-1]),
+  Y_fin = Im(Z[-1]),
+  step = steps,
+  step_length = step_length,
+  theta = theta,
+  velocidad = velocidad
+)
+```
+
+```{r}
+mov$turning_angle <- NA
+mov$turning_angle[-1] <- turning_angle
+
+```
+
+<p>De nuevo, vemos gráficos clásicos</p>
+
+```{r}
+hist(mov$step_length,
+     breaks =32,
+     col = "gray",
+     main = "Distribución de step lengths",
+     xlab = "Step length",
+     freq = FALSE)
+
+lines(density(mov$step_length), col = "red", lwd = 2)
+
+```
+
+```{r}
+hist(mov$turning_angle,
+     breaks = 32,
+     col = "gray",
+     main = "Distribución de turning angles",
+     xlab = "Turning angle (radianes)",
+     ylim = c(0, 0.7),
+     freq = FALSE)
+
+lines(density(na.omit(mov$turning_angle)),
+      col = "red",
+      lwd = 2)
+```
+
+```{r}
+plot(mov$tiempo_inicio,
+     mov$velocidad,
+     type = "o",
+     col = "darkred",
+     xlab = "Tiempo",
+     ylab = "Velocidad",
+     main = "Velocidad a lo largo del tiempo")
+```
+
+
+<h2>Métricas de resumen de la trayectoria</h2>
+
+<p>
+Bueno, ahora intentamos resumir toda la trayectoria en un conjunto pequeño de métricas globales. Que para mi son super útiles y muy utilizadas. Son relaivamente simples y pueden ser suficientes para cumplir, casi solitas, con el objetivo de un estudio. (ej. <a href="https://link.springer.com/article/10.1186/s40462-025-00577-y">Andersen et al. 2025</a>, <a href="https://link.springer.com/article/10.1186/s40462-025-00579-w">Oehler et al. 2025</a>). Muchas veces no es necesario complicarse la vida.
+</p>
+
+<p>
+Estas métricas permiten comparar individuos, períodos de tiempo o comportamientos,
+sin necesidad de entrar en algoritmos retorcidos. aunque después vemos que esa opcion compleja también puede ser interesante.
+</p>
+
+<h3>Distancia al origen y NDS</h3>
+
+<p>
+Primero medimos qué tan lejos está el individuo del punto inicial.
+</p>
+
+<ul>
+  <li><b>dist_origen:</b> distancia al punto inicial</li>
+  <li><b>NDS (Net Squared Displacement):</b> distancia al cuadrado al punto inicial de cada punto</li>
+</ul>
+
+<p>
+El NDS es muy utilizado en ecología del movimiento porque:
+</p>
+
+<ul>
+  <li>permite identificar fases de residencia y desplazamiento</li>
+  <li>es sensible a cambios grandes en la trayectoria</li>
+</ul>
+
+<p>
+Ecológicamente:
+</p>
+
+<ul>
+  <li>NDS bajo → el individuo permanece cerca del origen</li>
+  <li>NDS alto → el individuo se aleja del área inicial</li>
+</ul>
+
+<p>La variación deel NDS dice mucho, momentos con baja variación pueden indicar fidelidad de sitio.</p>
+
+<p>
+Otras dos métricas clave son:
+</p>
+
+<ul>
+  <li><b>dist_total:</b> distancia total recorrida (suma de todos los pasos)</li>
+  <li><b>dist_neta:</b> distancia en línea recta entre inicio y fin</li>
+</ul>
+
+<p>
+Estas dos medidas capturan dos aspectos distintos del movimiento:
+</p>
+
+<ul>
+  <li>cuánto se movió en total</li>
+  <li>qué tan lejos llegó efectivamente</li>
+</ul>
+
+<p>
+Es muy probable que estas dos métricas puedan anidarse bajo distintos criterios... como distancia neta diaria, distancia total diaria, durante el día y la noche, segun el ambiente atravesado, bla bla bla. Para todas estas agrupaciones tenemos que usar <code>group_by(criterio)</code> de dplyr.
+
+</p>
+
+<h3>Desplazamiento máximo (MDD)</h3>
+
+<p>
+El <b>Maximum Displacement Distance (MDD)</b> mide la máxima distancia alcanzada
+respecto al punto inicial.
+</p>
+
+<p>
+Es una forma simple de cuantificar el alcance espacial del individuo.
+</p>
+
+<ul>
+  <li>valores altos → exploración o dispersión</li>
+  <li>valores bajos → comportamiento más residente</li>
+</ul>
+
+
+<h3>MSD (Mean Squared Displacement)</h3>
+
+<p>
+El <b>MSD</b> es el promedio del NDS a lo largo del tiempo.
+</p>
+
+<p>
+Se utiliza mucho en estudios de difusión y movimiento animal,
+ya que resume el comportamiento general de la trayectoria.
+</p>
+
+<p>
+Ecológicamente puede indicar si el movimiento es:
+</p>
+
+<ul>
+  <li>difusivo (tipo random walk)</li>
+  <li>confinado (uso de área)</li>
+</ul>
+
+
+<h3>Straightness y tortuosidad</h3>
+
+<p>
+Estas métricas comparan la distancia total con la distancia neta y sus formulitas son super fáciles:
+</p>
+
+<ul>
+  <li><b>straightness:</b> dist_neta / dist_total</li>
+  <li><b>tortuosidad:</b> dist_total / dist_neta</li>
+</ul>
+
+<p>
+Interpretación:
+</p>
+
+<ul>
+  <li>straightness ≈ 1 → movimiento recto y direccional</li>
+  <li>straightness bajo → movimiento tortuoso</li>
+</ul>
+
+<ul>
+  <li>tortuosidad ≈ 1 → trayectoria recta</li>
+  <li>tortuosidad alta → trayectoria sinuosa</li>
+</ul>
+
+<p>
+Estas métricas son muy útiles para distinguir entre:
+</p>
+
+<ul>
+  <li>desplazamiento dirigido</li>
+  <li>exploración local o forrajeo</li>
+</ul>
+
+
+<h3>Sinuosidad angular</h3>
+
+<p>
+La <b>sinuosidad angular</b> mide cuánto cambia la dirección del movimiento
+por unidad de distancia recorrida.
+</p>
+
+<p>
+Se basa en la suma de los ángulos de giro:
+</p>
+
+<ul>
+  <li>valores altos → cambios frecuentes de dirección</li>
+  <li>valores bajos → movimiento más lineal</li>
+</ul>
+
+<p>
+Esta métrica complementa la tortuosidad, incorporando explícitamente
+la información angular del movimiento.
+</p>
+
+
+<h3>Velocidad y ángulos</h3>
+
+<p>
+También incluimos métricas basadas en los pasos:
+</p>
+
+<ul>
+  <li><b>vel_media:</b> velocidad promedio</li>
+  <li><b>vel_max:</b> velocidad máxima</li>
+  <li><b>mean_abs_turning_angle:</b> cambio promedio de dirección</li>
+</ul>
+
+<p>
+Estas métricas ayudan a caracterizar el comportamiento del individuo:
+</p>
+
+<ul>
+  <li>alta velocidad + bajo turning angle → desplazamiento direccional</li>
+  <li>baja velocidad + alto turning angle → exploración o residencia</li>
+</ul>
+
+<h3>¿Por qué son útiles estas métricas?</h3>
+
+<p>
+Estas métricas permiten resumir trayectorias complejas en pocos valores
+que pueden ser comparados entre individuos, poblaciones o condiciones ambientales.
+</p>
+
+```{r}
+# Net squared displacement
+df$NDS <- Mod(Z - Z[1])^2
+
+# Distancia al punto inicial
+df$dist_origen <- Mod(Z - Z[1])
+
+# Maximum displacement distance
+MDD <- max(df$dist_origen)
+
+# Distancia total recorrida
+dist_total <- sum(Mod(diff(Z)))
+
+# Distancia neta entre inicio y fin
+dist_neta <- Mod(Z[length(Z)] - Z[1])
+
+# Mean squared displacement
+MSD <- mean(df$NDS)
+
+# Straightness y tortuosidad
+straightness <- dist_neta / dist_total
+tortuosidad <- dist_total / dist_neta
+
+# Sinuosidad angular
+sinuosidad_ang <- sum(abs(mov$turning_angle), na.rm = TRUE) / dist_total
+```
+
+<p>Tablita de nuevo</p>
+
+```{r}
+metricas_resumen <- data.frame(
+  dist_total = dist_total,
+  dist_neta = dist_neta,
+  MDD = MDD,
+  MSD = MSD,
+  straightness = straightness,
+  tortuosidad = tortuosidad,
+  sinuosidad_ang = sinuosidad_ang,
+  vel_media = mean(mov$velocidad, na.rm = TRUE),
+  vel_max = max(mov$velocidad, na.rm = TRUE),
+  mean_abs_turning_angle = mean(abs(mov$turning_angle), na.rm = TRUE))
+
+
+```
+
+<h3>Trayectoria, distancia total y distancia neta</h3>
+
+```{r}
+plot(Z,
+     type = "o",
+     asp = 1,
+     col = "darkred",
+     xlab = "X",
+     ylab = "Y",
+     main = "Distancia total, distancia neta y tortuosidad")
+
+points(Re(Z[1]), Im(Z[1]),
+       col = "darkblue",
+       pch = 19,
+       cex = 1.5)
+
+points(Re(Z[length(Z)]), Im(Z[length(Z)]),
+       col = "darkgreen",
+       pch = 19,
+       cex = 1.5)
+
+segments(Re(Z[1]), Im(Z[1]),
+         Re(Z[length(Z)]), Im(Z[length(Z)]),
+         col = "darkblue",
+         lwd = 2,
+         lty = 2)
+
+legend("topleft",
+       legend = c(
+         paste0("Distancia total = ", round(dist_total, 2)),
+         paste0("Distancia neta = ", round(dist_neta, 2)),
+         paste0("Tortuosidad = ", round(tortuosidad, 2)),
+         paste0("Straightness = ", round(straightness, 2))
+       ), cex = 0.7)
+
+text(Re(Z[1]), Im(Z[1]),
+     labels = "Inicio",
+     pos = 4,
+     col = "darkblue")
+
+text(Re(Z[length(Z)]), Im(Z[length(Z)]),
+     labels = "Fin",
+     pos = 4,
+     col = "darkgreen")
+```
+
+
+<h2>Net Squared Displacement</h2>
+
+<p>
+Vamos a enfocarnos en esta métrica que me parece re interesante. El NDS mide cuánto se aleja el individuo del punto inicial a lo largo del tiempo. Es una métrica muy útil para conectar con segmentación, porque permite distinguir momentos de residencia, exploración o desplazamiento direccional.
+</p>
+
+```{r}
+plot(df$t,
+     df$NDS,
+     type = "o",
+     col = "darkred",
+     xlab = "Tiempo",
+     ylab = "Net Squared Displacement",
+     main = "NDS a lo largo del tiempo")
+```
+
+<p>Usando otra trayectoria vemos que puede ser útil. Está trayectoria tiene dos nucleos con mucho uso conectadas por un movimiento más dispersante</p>
+
+```{r}
+df_nds <- readRDS("nds.rds")
+
+plot(df_nds$Z,
+     type = "o",
+     asp = 1,
+     col = "darkred",
+     xlab = "X",
+     ylab = "Y",
+     main = "Trayectoria simulada: residencia - migración - residencia")
+
+points(df_nds$X[1], Y[1],
+       col = "darkblue",
+       pch = 19,
+       cex = 1.5)
+
+points(df_nds$X[length(df_nds$X)], df_nds$Y[length(df_nds$Y)],
+       col = "darkgreen",
+       pch = 19,
+       cex = 1.5)
+
+legend("topleft",
+       legend = c("Inicio", "Fin"),
+       col = c("darkblue", "darkgreen"),
+       pch = 19,
+       bty = "n")
+```
+
+<p>Vemos el NDS</p>
+
+```{r}
+plot(df_nds$t,
+     df_nds$NDS,
+     type = "o",
+     col = "darkred",
+     pch = 19,
+     xlab = "Tiempo",
+     ylab = "Net Squared Displacement")
+```
+
+<p> Una separación fácil podría ser esta, si el NDS es menor a 30 entonces es Residente y sino es Dispersante</p>
+
+```{r}
+df_nds$dNDS <- c(NA, diff(df_nds$NDS))
+
+df_nds$estado <- ifelse(abs(df_nds$dNDS) < 30,
+                       "Residente",
+                       "Dispersante")
+
+df_nds$estado <- factor(df_nds$estado)
+
+table(df_nds$estado)
+```
+
+
+```{r}
+cols_estado <- c("Dispersante" = "darkred","Residente" = "gold")
+
+plot(df_nds$t,
+     df_nds$NDS,
+     type = "n",
+     xlab = "Tiempo",
+     ylab = "Net Squared Displacement")
+
+lines(df_nds$t,
+      df_nds$NDS,
+      col = "gray70")
+
+points(df_nds$t,
+       df_nds$NDS,
+       col = "black",                     
+       bg = cols_estado[df_nds$estado],  
+       pch = 21)
+
+legend("topleft",
+       legend = names(cols_estado),
+       col = cols_estado,
+       pch = 19,
+       bty = "n")
+```
+
+<h2>Métricas por individuo</h2>
+
+<p>
+Hasta ahora trabajamos una sola trayectoria usando <code>Z = X + iY</code>.
+Ahora vamos a dividir la trayectoria en dos individuos para mostrar cómo calcular métricas por grupo usando <code>group_by()</code>.
+</p>
+
+```{r}
+library(dplyr)
+
+n <- length(Z)
+
+df <- data.frame(
+  Z = Z,
+  t = t
+)
+
+df$id <- ifelse(seq_along(Z) <= 250,
+                "individuo_1",
+                "individuo_2")
+
+table(df$id)
+```
+
+<p>
+Como <code>Z</code> contiene simultáneamente las coordenadas X e Y, podemos calcular distancias usando <code>Mod()</code>.
+</p>
+
+```{r}
+metricas_por_individuo <- df %>%
+  group_by(id) %>%
+  summarise(
+    n_puntos = n(),
+
+    dist_total = sum(Mod(diff(Z))),
+
+    dist_neta = Mod(last(Z) - first(Z)),
+
+    MDD = max(Mod(Z - first(Z))),
+
+    MSD = mean(Mod(Z - first(Z))^2),
+
+    straightness = dist_neta / dist_total,
+
+    tortuosidad = dist_total / dist_neta,
+
+    .groups = "drop"
+  )
+
+metricas_por_individuo
+```
+
+```{r}
+mov_id <- df %>%
+  group_by(id) %>%
+  arrange(t, .by_group = TRUE) %>%
+  mutate(
+    step = Z - lag(Z),
+    step_length = Mod(step),
+    theta = Arg(step),
+    dt_horas = as.numeric(difftime(t, lag(t), units = "hours")),
+    velocidad = step_length / dt_horas
+  ) %>%
+  mutate(
+    turning_angle = theta - lag(theta),
+    turning_angle = atan2(sin(turning_angle),
+                          cos(turning_angle))
+  ) %>%
+  ungroup()
+```
+
+```{r}
+metricas_por_individuo <- mov_id %>%
+  group_by(id) %>%
+  summarise(
+    n_puntos = n(),
+
+    dist_total = sum(step_length, na.rm = TRUE),
+
+    dist_neta = Mod(last(Z) - first(Z)),
+
+    MDD = max(Mod(Z - first(Z))),
+
+    MSD = mean(Mod(Z - first(Z))^2),
+
+    straightness = dist_neta / dist_total,
+
+    tortuosidad = dist_total / dist_neta,
+
+    sinuosidad_ang = sum(abs(turning_angle), na.rm = TRUE) /
+                     dist_total,
+
+    vel_media = mean(velocidad, na.rm = TRUE),
+
+    vel_max = max(velocidad, na.rm = TRUE),
+
+    mean_abs_turning_angle = mean(abs(turning_angle), na.rm = TRUE),
+
+    .groups = "drop"
+  )
+```
+
+```{r}
+cols_id <- c("individuo_1" = "darkred",
+             "individuo_2" = "steelblue")
+
+plot(Re(df$Z),
+     Im(df$Z),
+     type = "n",
+     asp = 1,
+     xlab = "X",
+     ylab = "Y",
+     main = "Trayectorias por individuo")
+
+for(i in unique(df$id)) {
+  z_i <- df$Z[df$id == i]
+  
+  lines(Re(z_i),
+        Im(z_i),
+        type = "o",
+        col = cols_id[i],
+        pch = 16)
+}
+
+legend("topleft",
+       legend = names(cols_id),
+       col = cols_id,
+       lwd = 2,
+       pch = 19,
+       bty = "n")
+```
+
+```{r}
+df <- df %>%
+  group_by(id) %>%
+  mutate(
+    NDS = Mod(Z - first(Z))^2,
+    t_rel = t - first(t)
+  ) %>%
+  ungroup()
+```
+
+```{r}
+plot(df$t_rel,
+     df$NDS,
+     type = "n",
+     xlab = "Tiempo desde el inicio",
+     ylab = "Net Squared Displacement",
+     main = "NDS por individuo")
+
+for(i in unique(df$id)) {
+  d_i <- df[df$id == i, ]
+  
+  lines(d_i$t_rel,
+        d_i$NDS,
+        type = "o",
+        col = cols_id[i],
+        pch = 19)
+}
+
+legend("topleft",
+       legend = names(cols_id),
+       col = cols_id,
+       lwd = 2,
+       pch = 19,
+       bty = "n")
+```
+
+<h3>Bounding box por individuo</h3>
+
+<p>
+Una forma simple de resumir el área utilizada por un individuo es mediante la <b>bounding box</b>,
+es decir, el rectángulo mínimo que contiene toda la trayectoria. Después vamos a entrar más en detalle en cómo hacer áreas de acción y todo eso. Esto es una aproximación nomas, simplemente extraemos los vertices "minimos" y "máximos" de las coordenadas.
+</p>
+
+```{r}
+bbox <- df %>%
+  group_by(id) %>%
+  summarise(
+    xmin = min(Re(Z)),
+    xmax = max(Re(Z)),
+    ymin = min(Im(Z)),
+    ymax = max(Im(Z)),
+    area_bbox = (xmax - xmin) * (ymax - ymin),
+    .groups = "drop"
+  )
+
+bbox
+```
+
+```{r}
+plot(Re(df$Z),
+     Im(df$Z),
+     type = "n",
+     asp = 1,
+     xlab = "X",
+     ylab = "Y",
+     main = "Bounding box por individuo")
+
+for(i in unique(df$id)) {
+  
+  z_i <- df$Z[df$id == i]
+  
+  # trayectoria
+  lines(Re(z_i),
+        Im(z_i),
+        col = cols_id[i],
+        lwd = 2)
+  
+  # bounding box
+  b <- bbox[bbox$id == i, ]
+  
+  rect(b$xmin, b$ymin,
+       b$xmax, b$ymax,
+       border = cols_id[i],
+       lwd = 2,
+       lty = 2)
+}
+
+legend("topleft",
+       legend = names(cols_id),
+       col = cols_id,
+       lwd = 2,
+       bty = "n")
+```
+
+<h1>¿Sirve <code>amt</code>?</h1>
+
+<p>
+El paquete <code>amt</code> es muy muy usado y permite trabajar con trayectorias animales en un formato específico llamado <code>track_xyt</code>.
+
+A partir de ese objeto se pueden calcular pasos, longitudes de paso, ángulos de giro, velocidad y áreas de uso. Sin embargo, al igual que muchos paquetes a veces complican las cosas más de lo necesario y muchas veces no es necesario.
+</p>
+
+```{r}
+library(amt)
+library(dplyr)
+```
+
+```{r}
+
+df <- df %>%
+  mutate(
+    x = Re(Z),
+    y = Im(Z) )
+
+
+trk <- make_track(df,
+                  .x = x,
+                  .y = y,
+                  .t = t,
+                  id = id)
+
+trk
+class(trk)
+```
+
+<p>
+La función <code>make_track()</code> requiere nombres de columnas existentes en el data frame sino no suele funcionar.
+Por eso primero extraemos las coordenadas X e Y desde el número complejo <code>Z</code>.
+</p>
+
+
+<h3>¿Qué tipo de objeto es un <code>track</code>?</h3>
+
+<p>
+El objeto <code>trk</code> que creamos con <code>amt</code> no es un data frame común.
+Es un objeto especial con varias clases:
+</p>
+
+<pre>
+track_xyt → track_xy → tbl_df → tbl → data.frame
+</pre>
+
+<p>
+Esto significa que:
+</p>
+
+<ul>
+  <li>
+    <b>data.frame / tbl_df:</b> se comporta como una tabla, por lo que podemos usar funciones de <code>dplyr</code> como <code>filter()</code>, <code>mutate()</code>, <code>group_by()</code>, etc.
+  </li>
+
+  <li>
+    <b>track_xy:</b> indica que el objeto contiene coordenadas espaciales (X, Y).
+  </li>
+
+  <li>
+    <b>track_xyt:</b> indica que además incluye información temporal (tiempo).
+  </li>
+</ul>
+
+<p>
+La diferencia clave es que <code>amt</code> reconoce este tipo de objeto y sabe cómo trabajar con él, pero solo "amt" lo sabe.
+Por ejemplo, funciones como <code>steps_by_burst()</code>, <code>hr_mcp()</code> o <code>hr_kde()</code> esperan este tipo de estructura.
+</p>
+
+<p>
+En otras palabras, es como un data frame “enriquecido” con información espacial y temporal,
+lo que permite aplicar directamente herramientas de análisis de movimiento.
+</p>
+
+
+```{r}
+stps <- df |> 
+  mutate(
+    x = Re(Z),
+    y = Im(Z)
+  ) |> 
+  (\(d) split(d, d$id))() |> 
+  lapply(function(d) {
+    
+    trk_i <- make_track(
+      d,
+      .x = x,
+      .y = y,
+      .t = t,
+      id = id
+    )
+    
+    steps(trk_i)
+  }) |> 
+  bind_rows()
+```
+
+<p>Creo que no es muy práctico, pero bueno, se usa.
+ En <b>amt</b> el objeto track es una df especial, pero una df en fin. El tema es que todas sus funciones exigen una estructura que considero muy incomoda y poco intuitiva. Acá para trabajar con steps, que es la base de todo, tenemos que usar la función "steps" como arriba.. pero que genera otro tipo de archivo llamado "steps_xyt", que tiene varias cosas raras.
+ 
+</p>
+
+<p>Una función que sí me resultó útil es la siguiente:</p>
+
+```{r}
+trk_resamp <- trk |> 
+  group_by(id)  |> 
+  track_resample(rate = hours(1), tolerance = minutes(10))
+
+trk_resamp
+```
+
+<p>Fácilmente podemos volver a nuestra df original, pero ahora resampled</p>
+
+```{r}
+df_sampled <- as.data.frame(trk_resamp)
+```
+
+<p>Otra que es útil es la de generar pasos aleatorios, pero me sigue paraeciendo díficil de manejar</p>
+
+<p>Esto es clave para Step Selection Functions, pero creo que podemos manejarla mucho más fácil haciendo todo manual. Cómo vimos en el notebook de <a href="https://valentinzarate.github.io/taller_mov/tema_1/num_com.html">Números Complejos</a>, podemos generar el set de pasos posibles de una manera sencilla, y esa es la base para generar los steps del SSF (Desp lo vemos).
+</p>
+
+```{r}
+ssf_data <- stps |> 
+  random_steps(n = 10)
+
+```
+
+<p>La función parece hermosamente fácil, pero recordemos que estamos trabajando en el universo de amt, que si bien es reversible cada transformación puede desconfigurar cosas. Algo más que no me gusta es que el código es oculto y sus funciones son inaccesibles, lo que lo hace un poco menos transparente.</p>
+
+<h1>Ejemplo de movebank</h1>
+
+<p> Vamos a usar un estudio de <a href="https://www.movebank.org/cms/webapp?gwt_fragment=page%3Dstudies%2Cpath%3Dstudy10204361">Aguilas pescadoras</a> (<i>Pandion haliaetus</i>) como ejemplo. Estos bichos migran muchísimo, así que pueden tener patrones interesantes para ver.
+</p>
+
+<div style="width:100%; height:380px; overflow:hidden;">
+  <img src="figures/pandion.jpeg" 
+       style="width:100%; transform: scale(0.9); transform-origin: center 20%;">
+</div>
+
+```{r}
+library(move)
+
+login <- movebankLogin(
+  username = "valentinzarate",
+  password = "Dni35089516!"
+)
+
+```
+
+<p>Este chunck de abajo muestra cómo descargar el archivo desde MoveBank. Tarda bastante porque son como 300,000 locs de 22 aguilas con bastante metadatos, pero lo dejo para que vean cómo se descarga el estudio desde movebank. Abajo pego la base de datos filtrando la millonada de metadatos asquerosos que hacian todo muy lento.. Además filté algunos bichos para que sea aun más rápida. </p>
+
+
+```{r, eval=FALSE}
+study <- 10204361
+pan <- getMovebankData(study = study, login = login)
+
+```
+
+<b>Pandion haliaetus</b>
+
+<p>Es el aguila pescadora, la cual se sabe que migra desde el norte de Ámerica del norta hasta sudamerica (llega a Argentina), pero claramente no todas migran igual. Vamos a usar estos datos para ver el NDS. </p>
+
+```{r, include=FALSE}
+pan <- read.csv("data/tables/pandion.csv")
+```
+
+<p>Selecciono algunas columnas relevantes</p>
+
+```{r}
+pan <- pan |> dplyr::select (timestamp, location.lat, location.long,individual.local.identifier, event.id)
+```
+
+```{r}
+str(pan)
+```
+
+<p>Bien, primero el tiempo.. está en chr, así que lo hacemos timestamp. No reniego con la tzone porque no me interesa ver patrones diarios.. si quisiese ver si migran de noche o de día entonces si tendría que detectar los tz correctos. Acá sería un desafío porque los bichos vuelan tanto que van cambiando de timezone. </p>
+
+```{r, eval=FALSE}
+pan$t <- as.POSIXct(pan$timestamp,
+                    format = "%Y-%m-%d %H:%M:%S")
+```
+
+<p>Nombres más felices</p>
+
+```{r, eval=FALSE}
+pan <- pan |> dplyr::rename(id = individual.local.identifier,
+                            lat = location.lat,
+                            lon = location.long) 
+```
+
+<p>Ahora calculamos las zona UTM</p>
+
+<p>Antes lo hacemos sf</p>
+
+```{r, eval=FALSE}
+require(sf)
+pan <- pan |> na.omit()
+
+pan_sf <- st_as_sf(pan,
+                   coords = c("lon", "lat"),
+                   crs = 4326)
+
+```
+
+```{r, include=FALSE}
+pan_sf <- readRDS("pan_sf.rds")
+```
+
+<p>Una alternativa a mapview es tmap.. acá le detallo <code>tmap_mode("plot")</code>, pero podría haber puesto "view" y sería interactivo como mapview. Tmap creoq ue tiene más posibilidades de configuración, muy similar a ggplot2. El paquete scales lo usamos solo para los colorcitos, especificamente para poner la "huel_pal"; sirve bastante cuando tenes que poner muchos colores bien diferenciados.
+</p>
+
+```{r}
+library(tmap)
+library(sf)
+library(scales)
+
+cols <- hue_pal()(length(unique(pan_sf$id)))
+bbox <- st_bbox(pan_sf)
+
+# expandir un poco (zoom out)
+expand <- 8  # grados 
+
+bbox_exp <- bbox
+bbox_exp["xmin"] <- bbox["xmin"] - expand
+bbox_exp["xmax"] <- bbox["xmax"] + expand
+bbox_exp["ymin"] <- bbox["ymin"] - expand
+bbox_exp["ymax"] <- bbox["ymax"] + expand
+
+tmap_mode("plot")  # estático
+
+tm_shape(pan_sf,bbox = bbox_exp) +
+  tm_basemap("Esri.WorldImagery", alpha = 0.9) +
+  tm_dots(
+    col = "id",
+    palette = cols,
+    size = 0.11,
+    alpha = 0.7
+  ) +
+  tm_layout(
+    legend.outside = TRUE,
+    frame = FALSE
+  )
+```
+
+<p>Averiguamos las zona UTM dónde están, acá puede hacer leves distorsiones porque justamente es posible que cambien de zonas</p>
+
+<p>Si ven con cuidad el script, no es muy diferente al que hicimos antes... acá lo unico relativamente nuevo que tiene son dos condiciones lógicas. Los bichos van de hemiferio norte a hemiferio sur y viceversa. Entonces le decimos que si la latitud es cero o positiva entonces le asignará "N" a la columna "hemisferio". Después va a usar esa columna para el segundo criterio.. si es N, entonces será 326XX (codigo UTM para zonas en el bloque norte), caso contrario será 327XX... </p>
+
+```{r, eval=FALSE}
+pan_ll <- st_transform(pan_sf, 4326)
+
+coords <- st_coordinates(pan_ll)
+
+pan_zonas <- pan_ll |> 
+  mutate(
+    lon = coords[, 1],
+    lat = coords[, 2],
+    utm_zone = floor((lon + 180) / 6) + 1,
+    hemisferio = ifelse(lat >= 0, "N", "S"),
+    epsg_utm = ifelse(hemisferio == "N",
+                      32600 + utm_zone,
+                      32700 + utm_zone)
+  )
+
+pan_zonas |> 
+  st_drop_geometry() |> 
+  count(id, utm_zone, hemisferio, epsg_utm)
+
+
+zonas_por_individuo <- pan_zonas |> 
+  st_drop_geometry() |> 
+  group_by(id) |> 
+  summarise(
+    n_zonas = n_distinct(epsg_utm),
+    zonas = paste(sort(unique(epsg_utm)), collapse = ", "),
+    lon_min = min(lon),
+    lon_max = max(lon),
+    lat_min = min(lat),
+    lat_max = max(lat),
+    .groups = "drop"
+  )
+
+zonas_por_individuo
+```
+
+```{r, echo=FALSE}
+zonas_por_individuo <- readRDS("zonas_pandion.rds")
+zonas_por_individuo
+```
+
+<p>Era esperable, los bichos llegan a usar hasta 6 zonas utm</p>
+
+<p>Acá vamos a seguir con UTM, pero bueno, quizás una proeccion global como EPSG: 8857 puede srevir, aunque son menos precisas. También podemos usar coordenadas geodesicas como WGS84, pero los calculos de distancias son medio engorrosos. </p>
+
+
+<p>lapply es básicamente una forma elegante de decir “hacé lo mismo con cada pedacito de esta lista”. Primero separamos el dataset por zonas UTM (queda como una lista de mini dataframes), y después con lapply le aplicamos la misma receta a cada uno... (1) reproyectamos a su EPSG correcto, (2) sacamos las coordenadas en metros y (3) se las agregás. Al final te queda una lista de resultados que después volvés a unir con bind_rows(). Es como un loop. </p>
+
+```{r, eval=FALSE}
+
+pan_ll <- pan_ll |> 
+  mutate(
+    lon = coords[, 1],
+    lat = coords[, 2],
+    utm_zone = floor((lon + 180) / 6) + 1,
+    hemisferio = ifelse(lat >= 0, "N", "S"),
+    epsg_utm = ifelse(hemisferio == "N",
+                      32600 + utm_zone,
+                      32700 + utm_zone)
+  )
+
+pan_utm_coords <- pan_ll |> 
+  group_split(epsg_utm) |> 
+  lapply(function(x) {
+    
+    epsg_i <- unique(x$epsg_utm)
+    
+    x_utm <- st_transform(x, epsg_i)
+    xy <- st_coordinates(x_utm)
+    
+    x |> 
+      mutate(
+        x_utm = xy[, 1],
+        y_utm = xy[, 2]
+      )
+  }) |> 
+  bind_rows()
+```
+
+
+
+```{r, include=FALSE, eval=FALSE}
+lista <- list(1:3, 4:6, 7:9)
+
+lapply(lista, sum)
+```
+
+
+<p>Bueno ahora haceemos Z, tal cual como venimos haciendo</p>
+
+```{r, eval=FALSE}
+pan_utm_coords <- pan_utm_coords |> 
+  mutate(Z = x_utm + 1i * y_utm)
+```
+
+
+```{r, eval=FALSE}
+pan_utm_coords <- pan_utm_coords |> 
+  arrange(id, t)  |> 
+  group_by(id) |> 
+  mutate(
+    NDS = Mod(Z - first(Z))^2,
+    dist_origen_m = Mod(Z - first(Z))
+  ) |> 
+  ungroup()
+```
+
+```{r, eval=FALSE}
+pan_utm_coords <- pan_utm_coords |> 
+  mutate(
+    fecha_anual = as.POSIXct(
+      paste0("2000-", format(t, "%m-%d %H:%M:%S")),
+      tz = "UTC"))
+
+```
+
+```{r, include = FALSE}
+pan_utm_coords <- readRDS("pandion.rds")
+```
+
+
+```{r}
+library(ggplot2)
+library(viridis)
+library(scales)
+library(dplyr)
+
+pan_plot <- pan_utm_coords |> 
+  arrange(id, fecha_anual) |> 
+  mutate(
+    NDS_km2 = NDS / 1e6
+  )
+
+ggplot(pan_plot,
+       aes(x = fecha_anual,
+           y = NDS_km2,
+           group = id,
+           color = id)) +
+  
+  geom_line(alpha = 0.75,
+            linewidth = 1.4,
+            lineend = "round") +
+  
+  scale_color_viridis_d(option = "inferno",
+                        end = 0.9) +
+  
+  scale_x_datetime(date_breaks = "1 month",
+                   date_labels = "%b",
+                   expand = expansion(mult = c(0.01, 0.01))) +
+  
+  scale_y_continuous(labels = label_number(big.mark = ".",
+                                           decimal.mark = ","),
+                     expand = expansion(mult = c(0.02, 0.08))) +
+  
+  labs(
+    x = "Mes",
+    y = expression("NDS (km"^2*")")
+  ) +
+  
+  theme_bw(base_size = 15) +
+  theme(
+    legend.position = "none",
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_line(linewidth = 0.25),
+    panel.grid.major.y = element_line(linewidth = 0.25),
+    axis.title = element_text(face = "bold"),
+    axis.text = element_text(color = "black"),
+    plot.margin = margin(10, 15, 10, 10)
+  )
+```
+<p>Ojo con la interpretacion</p>
+
+```{r}
+sqrt(15000000)
+```
+
+<p>
+El Net Squared Displacement (NDS) no representa un área real,
+sino la distancia al punto inicial elevada al cuadrado.
+</p>
+
+<p>
+Por lo tanto, valores grandes de NDS indican que el individuo
+se encuentra lejos del punto de origen.
+</p>
+
+<p>
+Para interpretar el NDS en términos de distancia,
+es necesario tomar la raíz cuadrada del valor.
+</p>
+
+
+<h3>Categorizamos segun NDS</h3>
+
+```{r}
+require(dplyr)
+pan_utm_coords_area <- pan_utm_coords |> 
+  group_by(id) |> 
+  arrange(t, .by_group = TRUE) |> 
+  mutate(
+    dNDS = abs(NDS - lag(NDS)),
+    estado = case_when(
+      is.na(dNDS) ~ "residente",
+      dNDS > 10000 ~ "dispersante",
+      TRUE ~ "residente"
+    )
+  ) |> 
+  ungroup()
+
+table(pan_utm_coords_area$estado
+      )
+```
+
+```{r}
+library(sf)
+library(tmap)
+library(dplyr)
+
+pan_wgs84 <- pan_utm_coords_area |> 
+  st_drop_geometry() |> 
+  st_as_sf(
+    coords = c("lon", "lat"),
+    crs = 4326,
+    remove = FALSE
+  )
+```
+
+```{r}
+tmap_mode("plot")
+
+pan_wgs84_facet <- pan_wgs84 |> 
+  mutate(estado = factor(estado, levels = c("residente", "dispersante")))
+
+tm_shape(pan_wgs84_facet, bbox = bbox_exp) +
+  tm_basemap("Esri.WorldImagery", alpha = 0.9) +
+  tm_dots(
+    col = "estado",
+    palette = c("residente" = "gold",
+                "dispersante" = "red"),
+    size = 0.2,
+    alpha = 0.6
+  ) +
+  tm_facets(by = "estado", ncol = 2) +
+  tm_layout(
+    legend.show = FALSE,
+    frame = FALSE
+  )
+```
+
