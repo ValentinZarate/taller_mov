@@ -1,0 +1,125 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Día 2</title>
+
+  <link rel="icon" type="image/png" href="figures/favicon2.png">
+
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<header class="header">
+  <div>
+    <h1>Día 2</h1>
+    <p>Métricas y Segmentación</p> 
+  </div>
+</header>
+
+<main>
+
+  <div class="module">
+    <h2>Objetivos</h2>
+    <p>
+     Acá la idea es ver como las unidades básicas de movimientos se pueden traducir en métricas de resumen y luego en análisis. La lógica es similar a la anterior, primero vemos una trayectoria simulada y luego datos de MoveBank. El objetivo es entender cómo los pasos y los ángulos de giro terminan generando todas las métricas y luego estas resultan en análisis. Aunque vamos a ver algunos análisis útiles, lo importante es entender su funcionamiento y no una millon de forma de aplicarlos. 
+    </p>
+  </div>
+
+  <div class="module">
+    <h2>Temas</h2>
+    <p>
+      El día lo organicé de la siguiente manera.
+    </p>
+    <ul>
+      <li>
+      <a href="https://valentinzarate.github.io/taller_mov/tema_2/metricas.html">
+        Métricas de resumen
+      </a>
+      </li>
+      <li>
+      <a href="https://valentinzarate.github.io/taller_mov/tema_2/segmentacion.html">
+        Segmentación - FPT y Lavielle
+      </a>
+      </li>
+       <li>
+      <a href="https://valentinzarate.github.io/taller_mov/tema_2/segmentacion_hmm.html">
+        Modelos Ocultos de Markov
+      </a>
+      </li>
+      <li>
+      <a href="https://valentinzarate.github.io/taller_mov/tema_2/functions.html">
+      Temita auxiliar - Funciones y Estructuras de Control</a>
+      </li>
+      </ul>
+  </div>
+
+  <div class="module">
+    <h2>Código en R</h2>
+    <p>Los análisis están todos en HTMLs cargados en este repositorio, pero pueden acceder a los Rmd "crudos" que terminaron generando los HTMLS. De todos modos en cada html uno puede copiar y pegar los scripts y las salidas; van a tener el formato de abajo. </p>
+    <div class="code-block">
+  <button class="copy-btn">Copiar</button>
+  <pre><code>datos <- read.csv("movimientos.csv")
+head(datos)</code></pre>
+</div>
+  </div>
+
+ <div class="module">
+    <h2>Presentaciones</h2>
+    <p>
+     <ul>
+      <li>
+      <a href="https://valentinzarate.github.io/taller_mov/tema_2/num_com.html">
+        Métricas
+      </a>
+      </li>
+      <li>
+      <a href="https://valentinzarate.github.io/taller_mov/tema_2/segm.html">
+        Segmentación
+      </a>
+      </li>
+      </ul>
+    </p>
+  </div>
+
+   <div class="module">
+    <h2>Proyecto, Scripts y Datos</h2>
+    <p>
+     <ul>
+      <li>
+      <a href="https://valentinzarate.github.io/taller_mov/tema_2/num_com.html">
+        Descargar todo
+      </a>
+      </li>
+      </ul>
+    </p>
+  </div>
+
+  <div class="module">
+    <h2>Volver</h2>
+    <p><a href="../index.html">← Regresar a la página principal</a></p>
+  </div>
+
+</main>
+
+<footer>
+  <p>© 2026 - Taller de Movimiento Animal</p>
+</footer>
+
+ <script>
+document.querySelectorAll(".copy-btn").forEach(button => {
+  button.addEventListener("click", () => {
+    const code = button.nextElementSibling.innerText;
+
+    navigator.clipboard.writeText(code);
+
+    button.innerText = "Copiado!";
+    setTimeout(() => button.innerText = "Copiar", 1500);
+  });
+});
+</script>
+</body>
+</html>
